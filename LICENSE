@@ -1,0 +1,47 @@
+ZamaniDeveloper Source-Available Attribution License 1.0
+
+Copyright (c) 2026 Mohsen Zamani (ZamaniDeveloper). All rights reserved
+except for the permissions expressly granted below.
+Project: Telegram Codex Remote
+Original source: https://github.com/ZamaniDeveloper/telegram-codex-remote
+
+1. Use and installation
+You may view, download, clone, install, run and modify this software for your
+own personal or commercial use. Copies necessary for installation, operation
+and backup are permitted. This permission applies to both the Telegram bot
+and the Windows connector, installer and startup scripts.
+
+2. Redistribution requires attribution
+You may redistribute the original or modified software only if you include
+this entire license and the copyright notice, prominently identify
+"Mohsen Zamani / ZamaniDeveloper" as the original developer, and provide the
+original-source URL in the accompanying documentation. Modified distributions
+must clearly identify their changes and must not be presented as an official
+release or as software originally authored by someone else. Existing author
+credits in the documentation, installers and bot help must be preserved in
+redistributed versions.
+
+3. Prohibited copying and misrepresentation
+Copying or republishing this code without the attribution and license required
+by section 2 is prohibited. You may not remove or replace the original
+developer's attribution, claim this code as your own original work, or grant
+recipients rights to disregard these conditions. Rights not expressly granted
+are reserved. Viewing and forking through GitHub remain subject to GitHub's
+Terms of Service; this license does not purport to override those terms.
+
+4. Contributions and third-party rights
+Contributions submitted for inclusion are offered under these same terms.
+Third-party software and trademarks retain their owners' rights. This is an
+independent project and does not imply endorsement by OpenAI or Telegram.
+No trademark rights or right to impersonate the developer are granted.
+
+5. Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. TO THE EXTENT
+PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER IS NOT LIABLE FOR DAMAGES
+ARISING FROM USE, DISTRIBUTION OR INABILITY TO USE THE SOFTWARE.
+
+Persian summary (the English terms above govern):
+نصب و استفادهٔ شخصی یا تجاری مجاز است. کپی لازم برای نصب و پشتیبان‌گیری
+مجاز است. کپی یا بازنشر بدون ذکر «Mohsen Zamani / ZamaniDeveloper»، نشانی
+مخزن اصلی و متن کامل این مجوز ممنوع است. حذف نام توسعه‌دهنده، انتشار به نام
+دیگران و معرفی نسخهٔ تغییرکرده به‌عنوان نسخهٔ رسمی ممنوع است.

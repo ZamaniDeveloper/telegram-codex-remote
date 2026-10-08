@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem without posting secrets.
+body:
+  - type: markdown
+    attributes:
+      value: "Never include bot tokens, connector secrets, SSH keys, pairing codes, private messages or full configuration files."
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce and expected behavior
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Bot, Codex desktop, Node.js and Windows versions
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Remove private paths and all credentials before submitting.
