@@ -53,7 +53,7 @@ test('fresh connector boots without preexisting data and confines SSH to pinned 
   const [, args, options] = calls[0];
   assert.ok(args.includes('StrictHostKeyChecking=yes')); assert.ok(args.includes('BatchMode=yes'));
   assert.ok(args.includes(`127.0.0.1:27841:127.0.0.1:${localPort}`));
-  assert.ok(args.includes(`UserKnownHostsFile=${path.join(root, 'data', 'connector_known_hosts')}`));
+  assert.ok(args.includes(`UserKnownHostsFile="${path.join(root, 'data', 'connector_known_hosts').replaceAll('\\', '/')}"`));
   assert.equal(options.windowsHide, true);
   await instance.stop(); await assert.rejects(access(path.join(root, 'data', 'connector.pid')));
 });

@@ -54,7 +54,7 @@ export class AccountRpc {
     });
   }
   async initialize() {
-    await this.request('initialize', { clientInfo: { name: 'telegram_codex_quota', version: '0.5.0' }, capabilities: { experimentalApi: true } });
+    await this.request('initialize', { clientInfo: { name: 'telegram_codex_quota', version: '0.5.1' }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
   }
   close() {

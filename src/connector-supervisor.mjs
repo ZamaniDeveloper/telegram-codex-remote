@@ -23,7 +23,7 @@ export function startConnector({ root = path.resolve(path.dirname(fileURLToPath(
     };
     try {
       ssh = spawnSsh(options.sshBin, ['-N', '-T', '-p', String(options.sshPort), '-i', options.keyFile,
-        '-o', `UserKnownHostsFile=${options.knownHostsFile}`,
+        '-o', `UserKnownHostsFile="${options.knownHostsFile.replaceAll('\\', '/').replaceAll('"', '\\"')}"`,
         '-o', 'StrictHostKeyChecking=yes', '-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes',
         '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
         '-R', `127.0.0.1:${options.remotePort}:127.0.0.1:${options.localPort}`, `${options.user}@${options.host}`],

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — 2026-10-08
+
+- Quote the pinned SSH known-hosts path and normalize Windows separators so checkouts with spaces connect correctly.
+- Verified the live private tunnel after Windows connector reload.
+
 ## 0.5.0 — 2026-10-08
 
 - Public release of both the Telegram bot and Windows connector/installer.
