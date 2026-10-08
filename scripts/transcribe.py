@@ -11,6 +11,19 @@ def main():
     model_path = request['modelPath']
     from faster_whisper import WhisperModel
     if request.get('install'):
+        # Verify the audio decoder API too, before declaring the installation ready.
+        from io import BytesIO
+        import wave
+        from faster_whisper.audio import decode_audio
+        sample = BytesIO()
+        with wave.open(sample, 'wb') as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(bytes(32000))
+        sample.seek(0)
+        if len(decode_audio(sample)) != 16000:
+            raise ValueError('Audio decoder verification failed')
         from faster_whisper.utils import download_model
         for attempt in range(3):
             try:
