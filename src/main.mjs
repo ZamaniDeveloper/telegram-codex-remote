@@ -10,6 +10,7 @@ import { RemoteDesktop } from './remote-desktop.mjs';
 import { Inbox } from './inbox.mjs';
 import { BotUi, UI_REVISION, UI_EDITION } from './ui.mjs';
 import { acquirePidLock } from './pid-lock.mjs';
+import { dispatchCallback } from './callback-dispatch.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -47,7 +48,7 @@ function attachOwner() {
 }
 async function setupUi() {
   const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'بستهٔ پیام‌ها'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
-  commands.push(...[['last', 'آخرین پیام'], ['newchat', 'چت جدید'], ['projects', 'پروژه‌ها'], ['newproject', 'پروژه جدید'], ['models', 'انتخاب مدل و استدلال'], ['compat', 'سازگاری و Whisper']].map(([command, description]) => ({ command, description })));
+  commands.push(...[['last', 'آخرین پیام هر گفتگو'], ['newchat', 'چت جدید'], ['projects', 'پروژه‌ها'], ['newproject', 'پروژه جدید'], ['models', 'انتخاب مدل و استدلال'], ['compat', 'سازگاری و Whisper']].map(([command, description]) => ({ command, description })));
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
   await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
   if (settings.uiRevision !== UI_REVISION || settings.uiEdition !== UI_EDITION) {
@@ -95,13 +96,7 @@ try {
       if (!isPrivateOwner(update, settings.ownerId)) continue;
       try {
         if (update.callback_query) {
-          await tg.call('answerCallbackQuery', { callback_query_id: update.callback_query.id });
-          const data = update.callback_query.data || '';
-          if (data.startsWith('u:')) await ui.callback(data);
-          else if (data.startsWith('f:')) await ui.features.callback(data);
-          else if (data.startsWith('r:')) await ui.quota.callback(data);
-          else if (data.startsWith('b:')) await inbox.callback(data);
-          else await bridge.callback(data);
+          await dispatchCallback(update.callback_query, tg, ui, inbox, bridge);
         } else if (message) await ui.message(message);
       } catch (e) { try { await tg.send(settings.ownerId, e.message); } catch {} }
     }

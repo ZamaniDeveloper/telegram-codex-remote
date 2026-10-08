@@ -6,8 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
 import { codexExecutable } from './quota-client.mjs';
+import { readLatestMessage } from './latest-message.mjs';
 
-const ALLOWED = new Set(['model/list', 'project/list', 'project/create', 'thread/start', 'thread/name/set']);
+const ALLOWED = new Set(['model/list', 'project/list', 'project/create', 'thread/start', 'thread/name/set', 'thread/items/list']);
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class ControlRpc {
   pending = new Map(); next = 0; closed = false;
@@ -49,7 +50,7 @@ export async function withControlRpc(operation) {
   const rpc = new ControlRpc(spawn(await codexExecutable(), ['app-server', '--stdio'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }));
   const deadline = setTimeout(() => rpc.close(), 120000);
   try {
-    await rpc.request('initialize', { clientInfo: { name: 'telecodex_control', version: '0.7.0' }, capabilities: { experimentalApi: true } });
+    await rpc.request('initialize', { clientInfo: { name: 'telecodex_control', version: '0.7.1' }, capabilities: { experimentalApi: true } });
     rpc.child.stdin.write('{"method":"initialized"}\n'); return await operation(rpc);
   } finally { clearTimeout(deadline); rpc.close(); }
 }
@@ -74,6 +75,7 @@ export class DesktopControl {
   }
   models() { return this.serial(rpc => this.pages(rpc, 'model/list')); }
   projects() { return this.serial(rpc => this.pages(rpc, 'project/list')); }
+  latestMessage(id) { return this.serial(rpc => readLatestMessage(rpc, id)); }
   async create(value) {
     if (!value || !ID.test(value.key || '') || !['chat', 'project'].includes(value.kind) || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 120 || (value.projectId && !ID.test(value.projectId))) throw Error('Invalid creation request');
     await mkdir(this.journal, { recursive: true }); const file = path.join(this.journal, value.key + '.json');

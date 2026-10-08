@@ -6,7 +6,7 @@ import path from 'node:path';
 import { QuotaUi } from './quota-ui.mjs';
 import { Features, featureRows } from './features.mjs';
 
-export const UI_REVISION = 5;
+export const UI_REVISION = 6;
 export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
@@ -30,9 +30,10 @@ export function chatKeyboard() {
 }
 export class BotUi {
   input = null; replies = new Map();
-  constructor(bridge, inbox) { this.bridge = bridge; this.inbox = inbox; this.tg = bridge.tg; this.chatId = bridge.chatId; this.quota = new QuotaUi(bridge, { stateFile: path.join(inbox.root, 'quota-reset.json') }); this.features = new Features(this); }
+  constructor(bridge, inbox) { this.bridge = bridge; this.inbox = inbox; this.tg = bridge.tg; this.chatId = bridge.chatId; this.quota = new QuotaUi(bridge, { stateFile: path.join(inbox.root, 'quota-reset.json') }); this.features = new Features(this); this.bridge.latestButton = row => button('🕘', this.features.action({ kind: 'last', row, offset: 0 })); }
+  cancelInput() { if (this.input) this.input.used = true; this.input = null; }
   async home(updated = false) {
-    this.input = null; this.features.input = null; const w = this.bridge.selected;
+    this.cancelInput(); this.features.cancelInput(); const w = this.bridge.selected;
     const body = concatRich(updated ? 'رابط جدید آماده است ✨\n\n' : '',
       styled('💬 چت فعال: '), w?.title || 'هنوز انتخاب نشده', '\n',
       styled('🔗 اتصال: '), w?.synced ? 'متصل به Codex' : 'چت را از دکمهٔ «چت‌ها» انتخاب کن', '\n',
@@ -67,7 +68,7 @@ export class BotUi {
     this.replies.set(sent.message_id, this.input); if (this.replies.size > 100) this.replies.delete(this.replies.keys().next().value);
   }
   async route(route) {
-    this.input = null; this.features.input = null;
+    this.cancelInput(); this.features.cancelInput();
     if (route === 'home' || route === 'start') return this.home();
     if (route === 'help') return this.help();
     if (route === 'usage') return this.quota.show();
@@ -104,11 +105,11 @@ export class BotUi {
   }
   async message(message) {
     if (!isForwarded(message) && !messageFile(message) && message.text) {
-      if (await this.features.message(message)) return;
       const route = Object.keys(LABELS).find(key => LABELS[key] === message.text.trim());
       if (route) return this.route(route);
       if (/^\/(usage|quota)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('usage');
-      if (/^\/(start|menu|help)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route(message.text.startsWith('/help') ? 'help' : 'home');
+      if (/^\/(start|menu|home|help)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route(message.text.trim().startsWith('/help') ? 'help' : 'home');
+      if (await this.features.message(message)) return;
       const steer = /^\/steer(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(message.text.trim());
       if (steer) {
         if (!steer[1]?.trim()) return this.route('steer');

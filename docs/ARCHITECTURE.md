@@ -73,3 +73,7 @@ Compatibility reads the installed package and ASAR metadata directly, inspecting
 Whisper runs in an isolated Python environment on Windows with offline local model loading. Incoming audio is transferred to checksum-verified attachment storage; the RPC takes validated attachment metadata, never an arbitrary local file path. Realpath confinement, file size/duration limits, a bounded serial queue and worker deadline restrict processing. Background jobs append transcripts to their original durable bundle. Failure retains the original audio; sending an unfinished bundle does not dispatch a model request.
 
 Runtime additions: data/creation-journal/, data/whisper-venv/ and data/whisper-model/. These directories and Python bytecode are excluded from Git and releases. See FEATURES-0.7.en.md for setup and limits.
+
+## Conversation latest messages (0.7.1)
+
+The authenticated latestMessage RPC accepts one UUID and exposes only the newest user/agent message. The control worker allowlist includes read-only thread/items/list with descending pagination; it never resumes or takes ownership of an existing conversation. Menus bind actions to the catalog row and reading does not select/open/watch a chat. Navigation retires the current creation/search/steering prompt; reply-keyboard routes run before ordinary input consumers. Callback acknowledgement failures are isolated from action dispatch and never trigger automatic action replay.

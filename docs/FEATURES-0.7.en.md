@@ -2,7 +2,7 @@
 
 Developed by **Mohsen Zamani / ZamaniDeveloper**. See [LICENSE](../LICENSE).
 
-- **Latest message** (`/last`) displays the last user or Codex message available in the loaded desktop history, preserving code formatting. It does not load the entire conversation automatically.
+- **Latest message** (`/last`) opens a paginated conversation picker. Choose any conversation to read its newest user or Codex message, including closed conversations, without changing the active chat. Clock buttons beside chat titles provide the same action. History is read through descending persisted item pages, preserving code formatting; tool events are skipped. Reading scans at most 2,500 recent items within the worker deadline and reports a limit or protocol error instead of returning an older message as latest.
 - **New chat / Projects** (`/newchat`, `/projects`) reads the native project list, asks for a project and title, creates a durable empty chat, then opens and selects it in the desktop app.
 - **New project** (`/newproject`) asks for a folder name. It creates a new directory under `%USERPROFILE%/Documents/TeleCodex Projects`, registers the project and creates its first chat. Existing directories are never overwritten. Set `TELECODEX_PROJECT_ROOT` on the Windows connector to choose a different parent directory.
 - **Change model** (`/models`) fetches the installed Codex model catalog, then offers the supported reasoning efforts. Controls bind to the idle selected chat, compare the previous settings and verify the resulting settings. They do not change an active turn or grant account access to unavailable models.

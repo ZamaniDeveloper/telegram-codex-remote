@@ -5,18 +5,14 @@ import { Transcriber } from './transcription.mjs';
 import { turnsOf } from './state.mjs';
 import { card, splitRich, markdown } from './format.mjs';
 import { text as T } from './feature-text.mjs';
+import { messageFromItem } from './latest-message.mjs';
 
 const ROUTES = ['last', 'newchat', 'projects', 'newproject', 'models', 'compat'];
 const b = (text, callback_data) => ({ text, callback_data });
 export const featureRows = () => [[T.last, T.newchat], [T.projects, T.newproject], [T.models, T.compat]];
 export function latestMessage(state) {
   for (const turn of [...turnsOf(state)].reverse()) for (const item of [...(turn.items || [])].reverse()) {
-    if (item.type === 'agentMessage' && item.text) return { role: 'Codex', text: item.text };
-    if (item.type === 'userMessage') {
-      const content = item.content || item.input || [];
-      const value = item.text || (Array.isArray(content) ? content.filter(i => i.type === 'text' || i.type === 'inputText').map(i => i.text).join('\n') : typeof content === 'string' ? content : '');
-      if (value) return { role: 'User', text: value };
-    }
+    const message = messageFromItem(item); if (message) return message;
   }
   return null;
 }
@@ -32,20 +28,16 @@ export class Features {
     if (this.actions.size > 300) this.actions.delete(this.actions.keys().next().value); return 'f:' + token;
   }
   send(title, body, rows = []) { return this.tg.send(this.chatId, card(title, body), { inline_keyboard: [...rows, [b(T.back, 'u:home')]] }); }
+  cancelInput() { if (this.input) this.input.used = true; this.input = null; }
   async prompt(kind, context = {}) {
-    this.ui.input = null;
+    this.cancelInput(); this.ui.cancelInput?.();
     const sent = await this.tg.send(this.chatId, card(kind === 'project' ? T.newproject : T.newchat, kind === 'project' ? T.projectName : T.title), { force_reply: true });
     this.input = { kind, ...context, key: randomUUID(), expires: Date.now() + 15 * 60000 };
     this.replies.set(sent.message_id, this.input); if (this.replies.size > 100) this.replies.delete(this.replies.keys().next().value);
   }
   async route(route) {
-    this.input = null; this.ui.input = null;
-    if (route === 'last') {
-      const last = latestMessage(this.bridge.requireSelected().state);
-      if (!last) return this.send(T.last, T.noMessage);
-      for (const chunk of splitRich(card(T.last + ' · ' + last.role, markdown(last.text)))) await this.tg.send(this.chatId, chunk);
-      return;
-    }
+    this.cancelInput(); this.ui.cancelInput?.();
+    if (route === 'last') return this.lastPage(0);
     if (route === 'newproject') { if (this.ui.inbox.current) throw Error(T.busy); return this.prompt('project'); }
     if (route === 'newchat' || route === 'projects') {
       if (this.ui.inbox.current) throw Error(T.busy);
@@ -62,6 +54,21 @@ export class Features {
       return this.send(T.compat, `${T[report.status] || T.unknown}\nCodex: ${report.version || '?'}\n${report.incompatible.join('\n')}\n\n${voice.ready ? T.whisperReady : T.whisperMissing}\n\n${T.boundary}`, [[b(T.refresh, this.action({ kind: 'refresh' }))]]);
     }
   }
+  async lastPage(offset = 0) {
+    const rows = await this.bridge.catalog('', 9, offset);
+    const buttons = rows.slice(0, 8).map(row => [b((row.title || row.cwd || row.id).slice(0, 64), this.action({ kind: 'last', row, offset }))]);
+    const pages = [];
+    if (offset) pages.push(b(T.previous, this.action({ kind: 'lastPage', offset: Math.max(0, offset - 8) })));
+    if (rows.length > 8) pages.push(b(T.next, this.action({ kind: 'lastPage', offset: offset + 8 })));
+    if (pages.length) buttons.push(pages);
+    return this.send(T.last, rows.length ? T.chooseLast : T.noChats, buttons);
+  }
+  async showLast(row, offset = 0) {
+    const last = await this.rpc('latestMessage', row.id);
+    const rows = [[b(T.refresh, this.action({ kind: 'last', row, offset }))], [b(T.allChats, this.action({ kind: 'lastPage', offset }))], [b(T.back, 'u:home')]];
+    const chunks = splitRich(card(T.last + ' · ' + (row.title || row.id), last ? markdown(last.role + '\n\n' + last.text) : T.noMessage));
+    for (let i = 0; i < chunks.length; i++) await this.tg.send(this.chatId, chunks[i], i === chunks.length - 1 ? { inline_keyboard: rows } : undefined);
+  }
   projectPage(rows, offset) {
     const buttons = rows.slice(offset, offset + 8).map(p => [b((p.name || p.id).slice(0, 64), this.action({ kind: 'project', projectId: p.id }))]);
     if (offset) buttons.push([b(T.previous, this.action({ kind: 'projectsPage', rows, offset: offset - 8 }))]);
@@ -75,9 +82,11 @@ export class Features {
     return this.send(T.models, T.chooseModel, buttons);
   }
   async callback(data) {
-    this.input = null; this.ui.input = null;
+    this.cancelInput(); this.ui.cancelInput?.();
     const token = data.slice(2), a = this.actions.get(token); if (!a || a.expires < Date.now() || a.used) throw Error(T.stale); a.used = true;
     if (a.kind === 'refresh') return this.route('compat');
+    if (a.kind === 'last') return this.showLast(a.row, a.offset);
+    if (a.kind === 'lastPage') return this.lastPage(a.offset);
     if (a.kind === 'newproject') return this.route('newproject');
     if (a.kind === 'projectsPage') return this.projectPage(a.rows, a.offset);
     if (a.kind === 'modelsPage') return this.modelPage(a.rows, a.offset, a);

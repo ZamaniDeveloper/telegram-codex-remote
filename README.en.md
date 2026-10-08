@@ -21,7 +21,7 @@ are excluded.
 
 ## Features
 
-- Latest loaded message, native new chat/project creation and verified model/reasoning controls.
+- Latest message of each conversation, including closed chats without changing the active selection; native new chat/project creation and verified model/reasoning controls.
 - Background local Whisper speech transcription and installed-protocol diagnostics.
 - [New controls, audio installation and limits](docs/FEATURES-0.7.en.md).
 

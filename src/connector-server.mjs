@@ -46,6 +46,7 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
       else if (method === 'quotaReset' && args.length === 1) result = await quota.consume(validateReset(args[0]));
       else if (method === 'models' && args.length === 0) result = await control.models();
       else if (method === 'projects' && args.length === 0) result = await control.projects();
+      else if (method === 'latestMessage' && args.length === 1) result = await control.latestMessage(args[0]);
       else if (method === 'createChat' && args.length === 1) result = await control.create(args[0]);
       else if (method === 'compatibilityRead' && args.length <= 1) result = await ipc.compatibilityRead(Boolean(args[0]));
       else if (method === 'transcriptionStatus' && args.length === 0) result = await transcriber.status();

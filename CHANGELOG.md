@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 - 2026-10-09
+
+- Read the latest user or Codex message from any conversation through a paginated picker and per-chat clock buttons, without changing the selected chat.
+- Read-only descending history pagination also works for closed conversations and skips tool events.
+- Main menu navigation takes precedence over chat/project creation prompts and retires cancelled inputs.
+- Expired callback acknowledgements no longer discard menu actions.
+- Regression coverage for both keyboard types, closed-chat history, paging, authentication and unchanged active selection.
+
 ## 0.7.0 - 2026-10-09
 
 - Latest loaded message, native project picker, durable new chat/project creation and desktop ownership handoff.
