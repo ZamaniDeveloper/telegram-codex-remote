@@ -65,7 +65,7 @@ export class Bridge {
         child.once('error', reject); child.once('spawn', resolve);
       });
       }
-      for (let attempt = 0; attempt < 5; attempt++) {
+      for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise(r => setTimeout(r, 700));
         try { owner = await this.ipc.owner(row.id); break; } catch {}
       }

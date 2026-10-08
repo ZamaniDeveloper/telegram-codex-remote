@@ -11,6 +11,8 @@ node_modules/
 .idea/
 .vscode/
 coverage/
+__pycache__/
+*.pyc
 dist/
 *.pid
 *.sqlite*

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { AttachmentStore, MAX_FILE_BYTES, safeFilename, imageExtension } from './attachments.mjs';
 
 import { card, concatRich, styled } from './format.mjs';
+import { Transcriber } from './transcription.mjs';
 
 const MAX_ITEMS = 100, MAX_BYTES = 100 * 1024 * 1024, MAX_TEXT = 100000;
 export function messageFile(message) {
@@ -56,6 +57,9 @@ export class Inbox {
     this.stateFile = path.join(this.root, 'pending.json');
     const store = new AttachmentStore();
     this.transfer = transfer || ((meta, source) => bridge.ipc.uploadAttachment ? bridge.ipc.uploadAttachment(meta, source) : store.uploadFile(meta, source));
+    const transcriber = new Transcriber();
+    this.transcribe = meta => bridge.ipc.transcribeAttachment ? bridge.ipc.transcribeAttachment(meta) : transcriber.transcribe(meta, store.root);
+    this.transcriptionJobs = new Map();
     try {
       this.current = JSON.parse(readFileSync(this.stateFile, 'utf8'));
       if (this.current && (!/^[\da-f-]{36}$/i.test(this.current.id) || !Array.isArray(this.current.items))) throw Error('Invalid inbox');
@@ -107,13 +111,15 @@ export class Inbox {
       const imageExt = imageExtension(downloaded.prefix);
       if (imageExt && !name.toLowerCase().endsWith('.' + imageExt)) name += '.' + imageExt;
       item.attachment = { id, name, cachePath, size: downloaded.size, sha256: downloaded.sha256 };
+      item.audio = Boolean(message.voice || message.audio || message.document?.mime_type?.startsWith('audio/'));
     }
     draft.items.push(item); this.save(); this.dirty = true;
+    if (item.audio) this.transcribeItem(draft, item).catch(() => {});
     if (Date.now() - this.lastNotice > 1500) await this.notice();
   }
   description(draft) {
     const attachments = draft.items.filter(i => i.attachment);
-    const preview = draft.items.slice(-5).map((i, n) => `${draft.items.length - Math.min(5, draft.items.length) + n + 1}. ${i.attachment?.name || i.text.replace(/[\r\n]/g, ' ').slice(0, 90)}`).join('\n');
+    const preview = draft.items.slice(-5).map((i, n) => `${draft.items.length - Math.min(5, draft.items.length) + n + 1}. ${i.attachment?.name || i.text.replace(/[\r\n]/g, ' ').slice(0, 90)}${i.audio ? '\n🎙 ' + (i.transcript ? i.transcript.slice(0, 500) : i.transcriptionError || 'Whisper: در حال تبدیل صوت…') : ''}`).join('\n');
     return card('📦 بستهٔ پیام‌ها', concatRich(styled('💬 چت: '), draft.title || 'هنوز انتخاب نشده', '\n', styled(`${draft.items.length} پیام · ${attachments.length} پیوست`),
       preview ? '\n\n' + preview : '\n\nمتن‌ها و پیوست‌ها را بفرست یا فوروارد کن.'), draft.status === 'uncertain' ? '⚠️ نتیجهٔ ارسال قبلی نامشخص است؛ چت Codex را بررسی کن.' : 'پیام‌های بعدی را اضافه کن؛ با دکمه‌ها همه را یکجا بفرست.');
   }
@@ -138,6 +144,23 @@ export class Inbox {
     finally { this.notifying = false; }
   }
   async flush() { if (this.dirty) await this.notice(); }
+  transcribeItem(draft, item) {
+    if (item.transcript) return Promise.resolve();
+    if (this.transcriptionJobs.has(item.attachment.id)) return this.transcriptionJobs.get(item.attachment.id);
+    item.transcription = 'processing'; this.save();
+    const job = (async () => {
+      try {
+        const meta = { ...item.attachment, batchId: draft.id };
+        await this.transfer(meta, item.attachment.cachePath);
+        const result = await this.transcribe(meta);
+        if (this.current !== draft) return;
+        if (result.text.length + draft.items.reduce((n, i) => n + i.text.length, 0) > MAX_TEXT) throw Error('Transcript exceeds bundle text limit');
+        item.transcript = result.text; item.text = [item.text, result.text].filter(Boolean).join('\n'); item.transcription = 'complete'; delete item.transcriptionError;
+      } catch (e) { item.transcription = 'failed'; item.transcriptionError = e.message; }
+      finally { this.transcriptionJobs.delete(item.attachment.id); if (this.current === draft) { this.save(); this.dirty = true; } }
+    })();
+    this.transcriptionJobs.set(item.attachment.id, job); return job;
+  }
   async callback(data) {
     const [, id, command] = data.split(':');
     if (!this.current || this.current.id !== id || !['send', 'cancel', 'instruction'].includes(command)) throw Error('این دکمه متعلق به بستهٔ فعال نیست. /pending');
@@ -159,6 +182,13 @@ export class Inbox {
     if (draft.status !== 'ready') throw Error('نتیجهٔ ارسال قبلی نامشخص است؛ چت Codex را بررسی کن. برای حذف این بسته /cancel را بزن.');
     const selected = this.bridge.readyToSend(draft.threadId);
     if (!draft.threadId) { draft.threadId = selected.id; draft.title = selected.title; }
+    const audios = draft.items.filter(item => item.audio && !item.transcript);
+    if (audios.length) {
+      // Keep Telegram polling responsive while the CPU processes audio. Click Send again when ready.
+      for (const item of audios) this.transcribeItem(draft, item).catch(() => {});
+      await this.tg.send(this.chatId, audios.some(i => i.transcriptionError) ? audios.map(i => i.transcriptionError).filter(Boolean).join('\n') : '🎙 Whisper: converting audio locally. The bundle is preserved; send it after transcription finishes.');
+      return;
+    }
     draft.status = 'preparing'; this.save();
     const files = new Map();
     try {

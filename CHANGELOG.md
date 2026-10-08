@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 - 2026-10-09
+
+- Latest loaded message, native project picker, durable new chat/project creation and desktop ownership handoff.
+- Live model catalog and supported reasoning controls, guarded by idle state and previous settings, with read-back verification.
+- Background local CPU Whisper transcription for voice/audio bundles, preserving original audio and failures.
+- Windows Whisper installer with an isolated Python environment and multilingual offline model.
+- Installed desktop protocol version inspection, explicit compatibility/audio diagnostics and refusal of incompatible controls.
+- SQLite catalog tolerates optional column changes; existing chats are never resumed by the control worker.
+- Duplicate-safe creation journals and regression tests for stale controls, uncertainty, confinement and asynchronous audio.
+
 ## 0.6.0 — 2026-10-08
 
 - TeleCodex branding using the maintainer-provided logo.

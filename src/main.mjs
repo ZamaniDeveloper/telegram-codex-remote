@@ -47,6 +47,7 @@ function attachOwner() {
 }
 async function setupUi() {
   const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'بستهٔ پیام‌ها'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
+  commands.push(...[['last', 'آخرین پیام'], ['newchat', 'چت جدید'], ['projects', 'پروژه‌ها'], ['newproject', 'پروژه جدید'], ['models', 'انتخاب مدل و استدلال'], ['compat', 'سازگاری و Whisper']].map(([command, description]) => ({ command, description })));
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
   await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
   if (settings.uiRevision !== UI_REVISION || settings.uiEdition !== UI_EDITION) {
@@ -97,6 +98,7 @@ try {
           await tg.call('answerCallbackQuery', { callback_query_id: update.callback_query.id });
           const data = update.callback_query.data || '';
           if (data.startsWith('u:')) await ui.callback(data);
+          else if (data.startsWith('f:')) await ui.features.callback(data);
           else if (data.startsWith('r:')) await ui.quota.callback(data);
           else if (data.startsWith('b:')) await inbox.callback(data);
           else await bridge.callback(data);

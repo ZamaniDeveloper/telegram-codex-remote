@@ -2,6 +2,7 @@
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
+import { Compatibility } from './compatibility.mjs';
 
 // Private desktop coordination protocol, observed on desktop 26.930.7945.
 // This attaches to the running app. It never starts a second agent server.
@@ -11,6 +12,7 @@ export const VERSIONS = {
   'thread-follower-start-turn': 2, 'thread-follower-steer-turn': 1,
   'thread-follower-interrupt-turn': 4, 'thread-follower-command-approval-decision': 1,
   'thread-follower-file-approval-decision': 1, 'thread-follower-submit-user-input': 1,
+  'thread-follower-read-model-settings': 1, 'thread-follower-update-thread-settings': 2,
 };
 export function frame(message) {
   const body = Buffer.from(JSON.stringify(message));
@@ -34,7 +36,7 @@ export class FrameReader {
 }
 export class DesktopIpc extends EventEmitter {
   pending = new Map(); clientId = ''; socket = null; connecting = null;
-  constructor(pipe = '\\\\.\\pipe\\codex-ipc') { super(); this.pipe = pipe; }
+  constructor(pipe = '\\\\.\\pipe\\codex-ipc') { super(); this.pipe = pipe; this.compatibility = new Compatibility(VERSIONS); }
   connect() {
     if (this.socket && this.clientId) return Promise.resolve();
     if (this.connecting) return this.connecting;
@@ -63,7 +65,8 @@ export class DesktopIpc extends EventEmitter {
     return this.connecting;
   }
   write(m) { if (!this.socket?.writable) throw Error('Codex disconnected'); this.socket.write(frame(m)); }
-  request(method, params, targetClientId, timeout = 20000) {
+  async request(method, params, targetClientId, timeout = 20000) {
+    if (method !== 'initialize' && process.platform === 'win32' && this.pipe === '\\\\.\\pipe\\codex-ipc') await this.compatibility.assert(method);
     const requestId = randomUUID();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(requestId); reject(Error('IPC timeout; do not automatically repeat an action')); }, timeout);
@@ -92,7 +95,10 @@ export class DesktopIpc extends EventEmitter {
     return r.handledByClientId;
   }
   follow(threadId, owner, following = true) {
-    this.broadcast('thread-stream-following-changed', { conversationId: threadId, hostId: 'local', following }, [owner]);
+    const send = () => this.broadcast('thread-stream-following-changed', { conversationId: threadId, hostId: 'local', following }, [owner]);
+    if (process.platform === 'win32' && this.pipe === '\\\\.\\pipe\\codex-ipc') this.compatibility.assert('thread-stream-following-changed').then(send).catch(() => { this.emit('disconnected'); });
+    else send();
   }
+  compatibilityRead(force = false) { return this.compatibility.read(force); }
   close() { this.socket?.destroy(); }
 }

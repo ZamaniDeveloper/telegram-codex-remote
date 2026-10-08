@@ -6,8 +6,10 @@ import { DesktopIpc, VERSIONS } from './ipc.mjs';
 import { listThreads } from './catalog.mjs';
 import { AttachmentStore } from './attachments.mjs';
 import { QuotaClient, validateReset } from './quota-client.mjs';
+import { DesktopControl } from './desktop-control.mjs';
+import { Transcriber } from './transcription.mjs';
 
-export function createConnector({ secret, ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient() } = {}) {
+export function createConnector({ secret, ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient(), control = new DesktopControl(), transcriber = new Transcriber() } = {}) {
   if (!secret || secret.length < 32) throw Error('Connector secret must be at least 32 characters');
   const clients = new Set();
   const authorized = header => {
@@ -42,6 +44,12 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
       if (method === 'listThreads') result = await catalog(String(args[0] || '').slice(0, 200), Math.min(20, Math.max(1, Number(args[1]) || 10)), Math.max(0, Number(args[2]) || 0));
       else if (method === 'quotaRead' && args.length === 0) result = await quota.read();
       else if (method === 'quotaReset' && args.length === 1) result = await quota.consume(validateReset(args[0]));
+      else if (method === 'models' && args.length === 0) result = await control.models();
+      else if (method === 'projects' && args.length === 0) result = await control.projects();
+      else if (method === 'createChat' && args.length === 1) result = await control.create(args[0]);
+      else if (method === 'compatibilityRead' && args.length <= 1) result = await ipc.compatibilityRead(Boolean(args[0]));
+      else if (method === 'transcriptionStatus' && args.length === 0) result = await transcriber.status();
+      else if (method === 'transcribeAttachment' && args.length === 1) result = await transcriber.transcribe(args[0], attachments.root);
       else if (method === 'owner') result = await ipc.owner(args[0]);
       else if (method === 'follow') { await ipc.connect(); ipc.follow(...args); result = true; }
       else if (method === 'request') {

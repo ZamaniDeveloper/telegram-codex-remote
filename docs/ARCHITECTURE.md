@@ -63,3 +63,13 @@ reboot and fresh-host interactive installation remain manual checks.
 
 Do not resume a desktop-owned chat on another agent server when compatibility or
 ownership checks fail.
+
+## Controls and local speech (0.7)
+
+DesktopControl uses a separate strict allowlist for model/project catalogs and new durable threads. It never resumes existing chats or starts a turn. It persists creation intent before mutation, stores the new thread identity and closes its worker before desktop adoption. Existing model changes use the desktop follower settings adapter with a comparison condition and read-back validation.
+
+Compatibility reads the installed package and ASAR metadata directly, inspecting only bounded build files for the numeric message-version manifest. It never executes extracted code or modifies the app. The adapter keeps its known schemas; changed versions are refused rather than blindly substituted. Unknown installations block private writes. The local catalog inspects optional SQL columns before preparing its read-only query.
+
+Whisper runs in an isolated Python environment on Windows with offline local model loading. Incoming audio is transferred to checksum-verified attachment storage; the RPC takes validated attachment metadata, never an arbitrary local file path. Realpath confinement, file size/duration limits, a bounded serial queue and worker deadline restrict processing. Background jobs append transcripts to their original durable bundle. Failure retains the original audio; sending an unfinished bundle does not dispatch a model request.
+
+Runtime additions: data/creation-journal/, data/whisper-venv/ and data/whisper-model/. These directories and Python bytecode are excluded from Git and releases. See FEATURES-0.7.en.md for setup and limits.

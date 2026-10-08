@@ -184,3 +184,7 @@ processes and keeps local data. Do not restart Codex during an active task.
 
 Do not upload raw logs or configurations. Runtime `data/` can contain private
 project documents and is intentionally ignored by Git.
+
+## New controls and local Whisper
+
+See [the 0.7 feature and installation guide](FEATURES-0.7.en.md). Install Whisper on the Windows connector computer, not the Telegram server. Update both components together and preserve private configuration/data.

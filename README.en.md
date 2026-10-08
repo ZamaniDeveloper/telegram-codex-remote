@@ -21,6 +21,10 @@ are excluded.
 
 ## Features
 
+- Latest loaded message, native new chat/project creation and verified model/reasoning controls.
+- Background local Whisper speech transcription and installed-protocol diagnostics.
+- [New controls, audio installation and limits](docs/FEATURES-0.7.en.md).
+
 - Persian-first native menus, formatted live replies, code blocks and links.
 - Existing-chat selection/search, history, interrupt and active-turn steering.
 - Bound question answers through buttons, free text and Telegram Reply.
@@ -75,13 +79,14 @@ Do not run a second Telegram poller on Windows in server mode.
 ## Commands
 
 `/menu`, `/chats`, `/find text`, `/status`, `/history`, `/steer [text]`, `/stop`,
-`/answer text`, `/batch`, `/pending`, `/send [instructions]`, `/cancel`, `/usage`.
+`/answer text`, `/batch`, `/pending`, `/send [instructions]`, `/cancel`, `/usage`,
+`/last`, `/newchat`, `/projects`, `/newproject`, `/models`, `/compat`.
 Native buttons cover common flows. Forwarded commands are reference content,
 never executed as control commands. Question Replies target their original chat.
 
 Limits: 20 MB per file, 100 messages, 100 MB of attachments and 100,000 text
 characters per bundle. Audio/video interpretation requires tools in the chat.
-Automatic speech transcription is not provided.
+Local Whisper automatically transcribes voice/audio after installation on Windows. See [0.7 controls and setup](docs/FEATURES-0.7.en.md).
 
 ## Verification
 
@@ -97,8 +102,7 @@ input; supply an open thread ID if the newest chat is closed.
 
 The private desktop protocol was inspected against Windows build `26.1002.7124.0`;
 verify compatibility after updating Codex. This independent project does not
-implement the full official Remote feature set. New project/chat creation, model
-switching, multiple accounts, cloud Work chats and voice input are outside this release.
+implement the full official Remote feature set. New project/chat creation, model/reasoning controls and local voice transcription are included. Multiple accounts and cloud Work chats remain outside this release. Protocol inspection detects version mismatches; future schema changes may require an adapter update.
 
 ## Copyright and attribution
 

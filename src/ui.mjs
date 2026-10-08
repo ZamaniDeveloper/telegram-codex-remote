@@ -4,8 +4,9 @@ import { isForwarded, messageFile } from './inbox.mjs';
 import { lastTurn, turnId } from './state.mjs';
 import path from 'node:path';
 import { QuotaUi } from './quota-ui.mjs';
+import { Features, featureRows } from './features.mjs';
 
-export const UI_REVISION = 4;
+export const UI_REVISION = 5;
 export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
@@ -14,7 +15,7 @@ export const LABELS = {
 };
 export function button(text, callback_data, style) { return { text, callback_data, ...(style ? { style } : {}) }; }
 export function mainKeyboard() {
-  return { keyboard: [[LABELS.chats, LABELS.search], [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.help], [LABELS.home]].map(row => row.map(text => ({ text }))),
+  return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.help], [LABELS.home]].map(row => row.map(text => ({ text }))),
     resize_keyboard: true, is_persistent: true, input_field_placeholder: 'پیام بنویس یا از دکمه‌ها استفاده کن' };
 }
 export function navKeyboard() { return { inline_keyboard: [[button('💬 چت‌ها', 'u:chats', 'primary'), button('🏠 منوی اصلی', 'u:home')]] }; }
@@ -29,9 +30,9 @@ export function chatKeyboard() {
 }
 export class BotUi {
   input = null; replies = new Map();
-  constructor(bridge, inbox) { this.bridge = bridge; this.inbox = inbox; this.tg = bridge.tg; this.chatId = bridge.chatId; this.quota = new QuotaUi(bridge, { stateFile: path.join(inbox.root, 'quota-reset.json') }); }
+  constructor(bridge, inbox) { this.bridge = bridge; this.inbox = inbox; this.tg = bridge.tg; this.chatId = bridge.chatId; this.quota = new QuotaUi(bridge, { stateFile: path.join(inbox.root, 'quota-reset.json') }); this.features = new Features(this); }
   async home(updated = false) {
-    this.input = null; const w = this.bridge.selected;
+    this.input = null; this.features.input = null; const w = this.bridge.selected;
     const body = concatRich(updated ? 'رابط جدید آماده است ✨\n\n' : '',
       styled('💬 چت فعال: '), w?.title || 'هنوز انتخاب نشده', '\n',
       styled('🔗 اتصال: '), w?.synced ? 'متصل به Codex' : 'چت را از دکمهٔ «چت‌ها» انتخاب کن', '\n',
@@ -66,7 +67,7 @@ export class BotUi {
     this.replies.set(sent.message_id, this.input); if (this.replies.size > 100) this.replies.delete(this.replies.keys().next().value);
   }
   async route(route) {
-    this.input = null;
+    this.input = null; this.features.input = null;
     if (route === 'home' || route === 'start') return this.home();
     if (route === 'help') return this.help();
     if (route === 'usage') return this.quota.show();
@@ -103,6 +104,7 @@ export class BotUi {
   }
   async message(message) {
     if (!isForwarded(message) && !messageFile(message) && message.text) {
+      if (await this.features.message(message)) return;
       const route = Object.keys(LABELS).find(key => LABELS[key] === message.text.trim());
       if (route) return this.route(route);
       if (/^\/(usage|quota)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('usage');

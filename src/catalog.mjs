@@ -11,9 +11,12 @@ export function listThreads(search = '', limit = 20, offset = 0) {
   if (!file) throw Error('Codex local thread catalog was not found');
   const db = new DatabaseSync(path.join(root, file), { readOnly: true });
   try {
-    return db.prepare(`SELECT id, COALESCE(name, title) AS title, cwd, model, updated_at
-      FROM threads WHERE archived = 0 AND agent_path IS NULL AND source NOT LIKE '{%'
-      AND (COALESCE(name,title) LIKE ? OR cwd LIKE ?)
+    const columns = new Set(db.prepare('PRAGMA table_info(threads)').all().map(c => c.name));
+    if (!['id', 'cwd', 'updated_at'].every(c => columns.has(c))) throw Error('Codex catalog schema changed; update TeleCodex');
+    const title = columns.has('name') && columns.has('title') ? 'COALESCE(name,title)' : columns.has('name') ? 'name' : columns.has('title') ? 'title' : 'id';
+    const filters = [columns.has('archived') ? 'archived = 0' : '1', columns.has('agent_path') ? 'agent_path IS NULL' : '1', columns.has('source') ? "source NOT LIKE '{%'" : '1'];
+    return db.prepare(`SELECT id, ${title} AS title, cwd, ${columns.has('model') ? 'model' : 'NULL AS model'}, updated_at
+      FROM threads WHERE ${filters.join(' AND ')} AND (${title} LIKE ? OR cwd LIKE ?)
       ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(`%${search}%`, `%${search}%`, limit, offset);
   } finally { db.close(); }
 }
