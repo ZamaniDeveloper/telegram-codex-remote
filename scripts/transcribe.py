@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import time
 os.environ['HF_HUB_DISABLE_XET'] = '1'
 
 def main():
@@ -11,7 +12,14 @@ def main():
     from faster_whisper import WhisperModel
     if request.get('install'):
         from faster_whisper.utils import download_model
-        download_model(request.get('model', 'small'), output_dir=model_path)
+        for attempt in range(3):
+            try:
+                download_model(request.get('model', 'small'), output_dir=model_path)
+                break
+            except Exception:
+                if attempt == 2:
+                    raise
+                time.sleep(2)
         WhisperModel(model_path, device='cpu', compute_type='int8', local_files_only=True)
         print(json.dumps({'ready': True}))
         return

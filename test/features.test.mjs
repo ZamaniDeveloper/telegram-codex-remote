@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -90,11 +90,11 @@ test('replies to creation prompts from before a restart cannot become model inpu
 test('local transcription resolves only checksum-verified attachment storage', async t => {
   const root = await temporary(t), bytes = Buffer.from('audio fixture'), meta = { batchId: randomUUID(), id: randomUUID(), name: '../../audio.wav', size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
   const store = new AttachmentStore(root); const file = await store.put(meta, PassThrough.from(bytes));
-  assert.equal(await resolveAudio(meta, root), file.path); await assert.rejects(resolveAudio({ ...meta, sha256: '0'.repeat(64) }, root), /checksum/); await assert.rejects(resolveAudio({ ...meta, batchId: '../escape' }, root), /metadata/);
+  assert.equal(await resolveAudio(meta, root), await realpath(file.path)); await assert.rejects(resolveAudio({ ...meta, sha256: '0'.repeat(64) }, root), /checksum/); await assert.rejects(resolveAudio({ ...meta, batchId: '../escape' }, root), /metadata/);
   const model = path.join(root, 'model'); await mkdir(model); await writeFile(path.join(model, 'model.bin'), 'test'); const python = path.join(root, 'python'); await writeFile(python, 'test');
   let called;
   const engine = new Transcriber({ python, modelPath: model, run: async (exe, request) => { called = request; return { text: 'local transcript' }; } });
-  assert.equal((await engine.transcribe(meta, root)).text, 'local transcript'); assert.equal(called.audioPath, file.path); assert.equal(called.modelPath, model);
+  assert.equal((await engine.transcribe(meta, root)).text, 'local transcript'); assert.equal(called.audioPath, await realpath(file.path)); assert.equal(called.modelPath, model);
 });
 test('voice transcription stays asynchronous and is bundled once with the original audio', async t => {
   const root = await temporary(t), bytes = Buffer.from('audio'), sent = [];
