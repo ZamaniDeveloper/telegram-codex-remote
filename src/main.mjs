@@ -8,7 +8,7 @@ import { Bridge } from './bridge.mjs';
 import { isPrivateOwner, matchesPairCode } from './auth.mjs';
 import { RemoteDesktop } from './remote-desktop.mjs';
 import { Inbox } from './inbox.mjs';
-import { BotUi, UI_REVISION } from './ui.mjs';
+import { BotUi, UI_REVISION, UI_EDITION } from './ui.mjs';
 import { acquirePidLock } from './pid-lock.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,8 +49,8 @@ async function setupUi() {
   const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'بستهٔ پیام‌ها'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
   await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
-  if (settings.uiRevision !== UI_REVISION) {
-    await ui.home(true); settings.uiRevision = UI_REVISION; save(); console.log('Telegram UI revision installed:', UI_REVISION);
+  if (settings.uiRevision !== UI_REVISION || settings.uiEdition !== UI_EDITION) {
+    await ui.home(true); settings.uiRevision = UI_REVISION; settings.uiEdition = UI_EDITION; save(); console.log('Telegram UI revision installed:', UI_REVISION, UI_EDITION);
     try { const panel = await ui.quota.show(); console.log('Quota screen delivered:', Boolean(panel?.message_id)); }
     catch { console.log('Quota screen unavailable at startup; use the usage button after reconnecting.'); }
   }

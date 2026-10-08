@@ -1,8 +1,14 @@
-# Telegram Codex Remote
+<p align="center"><img src="assets/telecodex-logo.jpg" alt="TeleCodex — Telegram + Codex" width="680"></p>
+
+# TeleCodex — نسخهٔ فارسی
 
 **ریموت تلگرام برای چت‌های فعلی Codex دسکتاپ؛ همراه ربات سرور و نصب‌کنندهٔ ویندوز**
 
 [English](README.en.md) · [نصب کامل](docs/INSTALL.fa.md) · [معماری](docs/ARCHITECTURE.md) · [تغییرات](CHANGELOG.md) · [مجوز](LICENSE)
+
+این مخزن نسخهٔ **فارسی ربات** است. برای ربات، نصب‌کننده و مستندات کاملاً انگلیسی،
+[نسخهٔ انگلیسی TeleCodex](https://github.com/ZamaniDeveloper/telegram-codex-remote-en) را نصب کن.
+هر نسخه شامل هر دو بخش ربات و رابط ویندوز است؛ از یک نسخه برای هر دو بخش استفاده کن.
 
 ![CI](https://github.com/ZamaniDeveloper/telegram-codex-remote/actions/workflows/ci.yml/badge.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-24.17%2B-339933)

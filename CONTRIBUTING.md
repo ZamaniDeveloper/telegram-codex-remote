@@ -1,5 +1,9 @@
 # Contributing
 
+This is the Persian edition of TeleCodex. Apply shared behavior and security
+fixes to the [English edition](https://github.com/ZamaniDeveloper/telegram-codex-remote-en)
+as well, and run each edition's tests before releasing matching versions.
+
 Developed by **Mohsen Zamani / ZamaniDeveloper**. Read [LICENSE](LICENSE) before
 using or redistributing this code. Contributions are submitted under those terms.
 

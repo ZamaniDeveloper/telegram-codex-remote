@@ -6,6 +6,7 @@ import path from 'node:path';
 import { QuotaUi } from './quota-ui.mjs';
 
 export const UI_REVISION = 4;
+export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
   bundle: '📦 بسته پیام‌ها', questions: '❓ سؤال‌های Codex', home: '🏠 منوی اصلی', help: 'ℹ️ راهنما',
@@ -36,7 +37,7 @@ export class BotUi {
       styled('🔗 اتصال: '), w?.synced ? 'متصل به Codex' : 'چت را از دکمهٔ «چت‌ها» انتخاب کن', '\n',
       styled('📦 بسته: '), this.inbox.current ? `${this.inbox.current.items.length} پیام آماده` : 'بسته‌ای باز نیست',
       '\n\nپیام‌ها و پیوست‌ها را بفرست؛ پاسخ‌ها و سؤال‌های Codex همین‌جا نمایش داده می‌شوند.');
-    return this.tg.send(this.chatId, card('🤖 Codex Remote', body, 'از دکمه‌های پایین استفاده کن.'), mainKeyboard());
+    return this.tg.send(this.chatId, card('🤖 TeleCodex', body, 'از دکمه‌های پایین استفاده کن.'), mainKeyboard());
   }
   async help() {
     return this.tg.send(this.chatId, card('✨ راهنمای ربات', concatRich(

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — 2026-10-08
+
+- TeleCodex branding using the maintainer-provided logo.
+- Separate installable Persian and English editions, each containing the bot and Windows setup scripts.
+- English edition translates bot menus, questions, approval/steering messages, attachment bundles and errors; usage uses English numbers and UTC dates.
+- Cross-edition links and preserved copyright/attribution terms.
+
 ## 0.5.1 — 2026-10-08
 
 - Quote the pinned SSH known-hosts path and normalize Windows separators so checkouts with spaces connect correctly.

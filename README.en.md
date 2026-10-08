@@ -1,8 +1,16 @@
-# Telegram Codex Remote
+<p align="center"><img src="assets/telecodex-logo.jpg" alt="TeleCodex — Telegram + Codex" width="680"></p>
+
+# TeleCodex — Persian edition
 
 **Control existing Windows Codex desktop chats from Telegram.**
 
 [فارسی](README.md) · [Installation](docs/INSTALL.en.md) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
+
+This repository installs the **Persian bot**. For an English bot, messages,
+buttons, installers and documentation, install the separate
+[English edition](https://github.com/ZamaniDeveloper/telegram-codex-remote-en).
+Each edition includes both the server bot and the Windows connector; use the
+same edition at both ends.
 
 ![CI](https://github.com/ZamaniDeveloper/telegram-codex-remote/actions/workflows/ci.yml/badge.svg)
 
