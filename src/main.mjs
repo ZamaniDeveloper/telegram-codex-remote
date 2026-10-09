@@ -29,6 +29,7 @@ function save() { writeFileSync(stateFile + '.tmp', JSON.stringify(settings, nul
 const tg = new Telegram(token); let running = true, bridge = null, inbox = null, ui = null, flushTimer, restoreSelection = null, lastRestore = 0;
 function stop() {
   running = false; clearInterval(flushTimer);
+  ui?.accounts.close().catch(() => {});
   try { bridge?.close(); } catch {}
   releaseLock();
 }
@@ -51,6 +52,7 @@ function attachOwner() {
 async function setupUi() {
   const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'ارسال‌گروهی‌پیام‌ها'], ['queue', 'صف ارسال'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
   commands.push(...[['last', 'آخرین پیام هر گفتگو'], ['newchat', 'چت جدید'], ['projects', 'پروژه‌ها'], ['newproject', 'پروژه جدید'], ['models', 'انتخاب مدل و استدلال'], ['compat', 'سازگاری و Whisper']].map(([command, description]) => ({ command, description })));
+  commands.push({ command: 'accounts', description: 'حساب‌های Codex و تعویض حساب' });
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
   await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
   if (settings.uiRevision !== UI_REVISION || settings.uiEdition !== UI_EDITION) {
@@ -78,6 +80,7 @@ try {
       }
       await bridge.flush();
       await bridge.outbox.follow(bridge); await bridge.outbox.flush(bridge);
+      await ui.accounts.poll();
     }
     catch { /* Retry connection/stream sync, never resend a user action. */ }
     finally { flushing = false; }

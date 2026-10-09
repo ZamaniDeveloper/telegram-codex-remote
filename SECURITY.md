@@ -1,6 +1,6 @@
 # Security policy
 
-Supported development line: 0.5.x. The desktop coordination protocol is private
+Supported development line: 0.8.x. The desktop coordination protocol is private
 and version-dependent. Verify a desktop update with `npm run doctor` before
 allowing control actions.
 
@@ -23,3 +23,7 @@ automatically repeated. The quota-reset journal preserves the original request I
 
 Do not deploy this as a public multi-user bot. The current release is designed for
 one paired Telegram owner controlling their own Windows desktop.
+
+Account profiles remain in a Windows DPAPI CurrentUser vault. Private operation
+backups and authentication caches must stay out of Git and public logs. Switching
+requires owner confirmation and an idle desktop. See [account recovery](docs/ACCOUNTS.en.md).

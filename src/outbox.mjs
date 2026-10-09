@@ -47,11 +47,12 @@ export class Outbox {
     }
   }
   async flush(bridge, onlyThread) {
-    if (this.flushing) return;
+    if (this.flushing || bridge.accountSwitching) return;
     this.flushing = true;
     try {
       const ids = [...new Set(this.entries.map(e => e.threadId))].filter(id => !onlyThread || onlyThread === id);
       for (const id of ids) {
+        if (bridge.accountSwitching) break;
         let entry = this.entries.find(e => e.threadId === id);
         const w = bridge.watched.get(id);
         if (!w?.synced || !w.owner) continue;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 - 2026-10-09
+
+- Add Accounts and `/accounts` for phone device-code login and confirmed manual switching.
+- Store profiles with Windows DPAPI and isolate login from active project state.
+- Guard local active turns and competing connector operations; pause queue dispatch.
+- Restart Codex on the same home, verify project/chat identities and retain private backups.
+- Journal activation, attempt rollback on startup failure and never replay ambiguous switches.
+- Cover login cancellation, Windows file locks, encryption, authenticated RPC, stale/busy guards and rollback.
+
 ## 0.7.5 - 2026-10-09
 
 - Attach the full main menu directly to the /menu and Home message, so controls remain visible when Telegram hides the reply keyboard.

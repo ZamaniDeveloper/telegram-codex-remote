@@ -89,3 +89,7 @@ Outbox stores up to 100 requests / 8 MiB in data/outbox.json using atomic replac
 ## Inline main menu (0.7.5)
 
 Home responses carry the complete inline menu, independent of reply-keyboard visibility. UI upgrade installs the quick-access keyboard in a separate message. Read-only feature navigation uses stateless u: routes; creation and model writes retain their existing scoped prompts and guarded one-shot actions. Main-menu latest-message navigation opens the picker while conversation menus retain UUID-bound latest buttons.
+
+## Accounts (0.8.0)
+
+An isolated authentication worker performs device-code login. Profiles remain in a Windows DPAPI vault. Activation is bound to an expected current profile and request UUID, pauses queue delivery, checks local activity, restarts the installed desktop and verifies retained local identities. No auth worker resumes an existing chat. See [account storage and recovery](ACCOUNTS.en.md).

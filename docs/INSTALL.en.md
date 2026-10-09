@@ -188,3 +188,7 @@ project documents and is intentionally ignored by Git.
 ## New controls and local Whisper
 
 See [the 0.7 feature and installation guide](FEATURES-0.7.en.md). Install Whisper on the Windows connector computer, not the Telegram server. Update both components together and preserve private configuration/data.
+
+## Accounts from Telegram (0.8.0)
+
+Use Accounts or `/accounts` to add a ChatGPT login on your phone and manually switch the Windows account while retaining local projects. Update both components. See [account setup and recovery](ACCOUNTS.en.md).
