@@ -77,3 +77,7 @@ Runtime additions: data/creation-journal/, data/whisper-venv/ and data/whisper-m
 ## Conversation latest messages (0.7.1)
 
 The authenticated latestMessage RPC accepts one UUID and exposes only the newest user/agent message. The control worker allowlist includes read-only thread/items/list with descending pagination; it never resumes or takes ownership of an existing conversation. Menus bind actions to the catalog row and reading does not select/open/watch a chat. Navigation retires the current creation/search/steering prompt; reply-keyboard routes run before ordinary input consumers. Callback acknowledgement failures are isolated from action dispatch and never trigger automatic action replay.
+
+## Compact live streams (0.7.2)
+
+The Windows connector keeps a bounded full-state mirror for at most 16 conversations and applies original desktop revision patches there. It emits compact coherent snapshots containing all user/assistant messages, questions, pending requests, approval-related items and the context needed for controls. Old tool outputs and unrelated desktop fields stay on Windows. Raw private patches never run against projected state. Mirror gaps invalidate remote sync and cause a fresh subscription. A successful existing snapshot is reused when the owner is unchanged. Concurrent selections maintain separate snapshot waiters; only the newest successful selection is persisted. Full persisted history remains available through the read-only latest-message API.

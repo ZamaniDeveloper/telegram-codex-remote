@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2 - 2026-10-09
+
+- Compact live snapshots retain messages, questions, active approval details and control context while keeping old tool output on Windows.
+- Desktop patches are applied to a full local mirror before projecting coherent snapshots for the remote bot.
+- Already synced chats can be selected without waiting for a duplicate snapshot; overlapping selections use independent waiters and respect selection order.
+- A failed selection preserves the previous ready chat; timeouts clean up their waiters and revision gaps resubscribe safely.
+- Regression tests include a 20 MB history, live patch updates, canonical history, approvals and selection races.
+
 ## 0.7.1 - 2026-10-09
 
 - Read the latest user or Codex message from any conversation through a paginated picker and per-chat clock buttons, without changing the selected chat.

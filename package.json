@@ -2,7 +2,7 @@
   "name": "telegram-codex-desktop-remote",
   "private": true,
   "type": "module",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "edition": "fa",
   "description": "Persian-first Telegram remote for existing Codex desktop chats, with a Windows connector and private SSH transport.",
   "author": "Mohsen Zamani (ZamaniDeveloper)",

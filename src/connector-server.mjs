@@ -8,10 +8,11 @@ import { AttachmentStore } from './attachments.mjs';
 import { QuotaClient, validateReset } from './quota-client.mjs';
 import { DesktopControl } from './desktop-control.mjs';
 import { Transcriber } from './transcription.mjs';
+import { LiveStream } from './live-stream.mjs';
 
 export function createConnector({ secret, ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient(), control = new DesktopControl(), transcriber = new Transcriber() } = {}) {
   if (!secret || secret.length < 32) throw Error('Connector secret must be at least 32 characters');
-  const clients = new Set();
+  const clients = new Set(), stream = new LiveStream();
   const authorized = header => {
     const a = Buffer.from(header || ''); const b = Buffer.from(`Bearer ${secret}`);
     return a.length === b.length && timingSafeEqual(a, b);
@@ -52,7 +53,7 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
       else if (method === 'transcriptionStatus' && args.length === 0) result = await transcriber.status();
       else if (method === 'transcribeAttachment' && args.length === 1) result = await transcriber.transcribe(args[0], attachments.root);
       else if (method === 'owner') result = await ipc.owner(args[0]);
-      else if (method === 'follow') { await ipc.connect(); ipc.follow(...args); result = true; }
+      else if (method === 'follow') { await ipc.connect(); if (args[2] === false) stream.forget(args[0]); await ipc.follow(...args); result = true; }
       else if (method === 'request') {
         if (!Object.hasOwn(VERSIONS, args[0]) || !args[0].startsWith('thread-follower-')) throw Error('RPC method not allowed');
         await ipc.connect(); result = await ipc.request(...args);
@@ -70,12 +71,13 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
     } catch (e) { json(res, 400, { error: e.message }); }
   });
   const broadcast = m => {
+    m = stream.project(m);
     for (const client of clients) {
       if (client.writableLength > 32 * 1024 * 1024) { client.destroy(); continue; }
       client.write(`data: ${JSON.stringify({ type: 'broadcast', message: m })}\n\n`);
     }
   };
-  const disconnected = () => { for (const client of clients) client.write('data: {"type":"disconnected"}\n\n'); };
+  const disconnected = () => { stream.clear(); for (const client of clients) client.write('data: {"type":"disconnected"}\n\n'); };
   ipc.on('broadcast', broadcast); ipc.on('disconnected', disconnected);
   server.on('close', () => { ipc.off('broadcast', broadcast); ipc.off('disconnected', disconnected); });
   server.shutdown = async () => { for (const c of clients) c.end(); ipc.close(); await new Promise(r => server.close(r)); };

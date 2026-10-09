@@ -96,7 +96,7 @@ export class DesktopIpc extends EventEmitter {
   }
   follow(threadId, owner, following = true) {
     const send = () => this.broadcast('thread-stream-following-changed', { conversationId: threadId, hostId: 'local', following }, [owner]);
-    if (process.platform === 'win32' && this.pipe === '\\\\.\\pipe\\codex-ipc') this.compatibility.assert('thread-stream-following-changed').then(send).catch(() => { this.emit('disconnected'); });
+    if (process.platform === 'win32' && this.pipe === '\\\\.\\pipe\\codex-ipc') return this.compatibility.assert('thread-stream-following-changed').then(send).catch(() => { this.emit('disconnected'); });
     else send();
   }
   compatibilityRead(force = false) { return this.compatibility.read(force); }

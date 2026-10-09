@@ -23,7 +23,8 @@ export function steeringParams(w, input) {
 }
 export class Bridge {
   watched = new Map(); actions = new Map(); selected = null; selectionEpoch = 0;
-  constructor(telegram, chatId, ipc = new DesktopIpc(), catalog = listThreads) {
+  constructor(telegram, chatId, ipc = new DesktopIpc(), catalog = listThreads, { snapshotTimeoutMs = 30000 } = {}) {
+    this.snapshotTimeoutMs = snapshotTimeoutMs;
     this.tg = telegram; this.chatId = chatId; this.ipc = ipc; this.catalog = catalog; this.questions = new QuestionManager(this);
     ipc.on('broadcast', m => this.onBroadcast(m));
     ipc.on('disconnected', () => { for (const w of this.watched.values()) { w.owner = null; w.synced = false; } });
@@ -81,14 +82,32 @@ export class Bridge {
     let w = this.watched.get(row.id);
     if (!w) { w = { id: row.id, title: row.title, owner, synced: false, revision: null, state: null,
       messages: new Map(), sentRequests: new Set(), seenTurns: new Set() }; this.watched.set(row.id, w); }
-    w.owner = owner; this.selected = w;
-    const ready = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(Error('وضعیت زنده هنوز دریافت نشده؛ دوباره انتخاب کن.')), 15000);
-      w.resolveSnapshot = () => { clearTimeout(timer); resolve(); };
-    });
-    this.ipc.follow(row.id, owner); await ready;
+    if (w.owner !== owner) { w.synced = false; w.state = null; w.revision = null; }
+    w.owner = owner;
+    if (!w.synced) {
+      const ready = this.waitSnapshot(w);
+      this.ipc.follow(row.id, owner); await ready;
+    }
+    if (epoch !== this.selectionEpoch) return;
+    if (row.title) w.title = row.title;
+    this.selected = w;
     this.onSelected?.(row);
     if (notify) await this.tg.send(this.chatId, card('✅ چت انتخاب شد', concatRich(styled(row.title || 'Codex'), '\n\n📁 پروژه: ', w.state.cwd || 'بدون پروژه', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض'), 'پیام بعدی به همین چت می‌رود.'), chatKeyboard());
+  }
+  waitSnapshot(w) {
+    return new Promise((resolve, reject) => {
+      const finish = error => {
+        clearTimeout(timer); w.snapshotWaiters.delete(finish);
+        error ? reject(error) : resolve();
+      };
+      const timer = setTimeout(() => finish(Error('دریافت وضعیت زنده طول کشید؛ اتصال رابط ویندوز را بررسی کن.')), this.snapshotTimeoutMs);
+      (w.snapshotWaiters ||= new Set()).add(finish);
+    });
+  }
+  resync(w) {
+    w.synced = false;
+    if (w.resyncing) return;
+    w.resyncing = (async () => { await this.ipc.follow(w.id, w.owner, false); await this.ipc.follow(w.id, w.owner); })().catch(() => {}).finally(() => { w.resyncing = null; });
   }
   onBroadcast(m) {
     if (m.params?.hostId !== 'local') return;
@@ -103,11 +122,11 @@ export class Bridge {
         w.initialized = true;
         for (const turn of turnsOf(w.state)) if (turn.status !== 'inProgress') w.seenTurns.add(turnId(turn));
       }
-      w.resolveSnapshot?.(); w.resolveSnapshot = null;
+      for (const finish of [...(w.snapshotWaiters || [])]) finish();
     } else if (change.type === 'patches') {
-      if (!w.synced || change.baseRevision !== w.revision) { w.synced = false; this.ipc.follow(w.id, w.owner); return; }
+      if (!w.synced || change.baseRevision !== w.revision) { this.resync(w); return; }
       try { w.state = applyPatches(w.state, change.patches); w.revision = change.revision; }
-      catch { w.synced = false; this.ipc.follow(w.id, w.owner); }
+      catch { this.resync(w); }
     }
   }
   requireSelected() {

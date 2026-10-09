@@ -55,7 +55,7 @@ export class RemoteDesktop extends EventEmitter {
     }
   }
   async owner(id) { await this.connect(); return this.rpc('owner', [id]); }
-  follow(...args) { this.rpc('follow', args).catch(() => { this.emit('disconnected'); }); }
+  follow(...args) { return this.rpc('follow', args).catch(() => { this.emit('disconnected'); }); }
   request(...args) { return this.rpc('request', args); }
   listThreads(...args) { return this.rpc('listThreads', args); }
   quotaRead() { return this.rpc('quotaRead', []); }
