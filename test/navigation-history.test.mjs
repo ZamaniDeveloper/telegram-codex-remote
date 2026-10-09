@@ -8,7 +8,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Bridge } from '../src/bridge.mjs';
 import { Inbox } from '../src/inbox.mjs';
-import { BotUi, LABELS } from '../src/ui.mjs';
+import { BotUi, LABELS, chatKeyboard } from '../src/ui.mjs';
 import { dispatchCallback } from '../src/callback-dispatch.mjs';
 import { readLatestMessage, messageFromItem } from '../src/latest-message.mjs';
 import { createConnector } from '../src/connector-server.mjs';
@@ -66,6 +66,20 @@ test('latest picker pages through every chat and reads a closed chat without sel
   await f.ui.route('chats'); const shortcut = f.sent.at(-1).markup.inline_keyboard[0][1];
   await f.ui.features.callback(shortcut.callback_data); assert.equal(f.calls.at(-1), f.rows[0].id);
   assert.equal(f.bridge.selected, selected);
+});
+
+test('chat-menu latest message stays bound to its conversation after the active chat changes', async t => {
+  const f = await fixture(t), original = f.bridge.selected;
+  f.bridge.watched.set(original.id, original);
+  const latest = chatKeyboard(original.id).inline_keyboard.flat().find(b => b.callback_data.startsWith('u:last:'));
+  assert.ok(latest); assert.ok(Buffer.byteLength(latest.callback_data) <= 64);
+  f.bridge.selected = { id: randomUUID(), title: 'Other active chat' };
+  f.inbox.begin(); const bundle = f.inbox.current;
+  await f.ui.callback(latest.callback_data);
+  assert.deepEqual(f.calls, [original.id]); assert.equal(f.inbox.current, bundle);
+  assert.equal(f.bridge.selected.title, 'Other active chat'); assert.ok(f.sent.at(-1).text.includes(original.title));
+  await f.ui.callback('u:last'); assert.equal(f.calls.at(-1), f.bridge.selected.id);
+  await assert.rejects(f.ui.callback('u:last:invalid-id'));
 });
 
 test('descending persisted history skips tools, pages and returns the newest user message', async () => {

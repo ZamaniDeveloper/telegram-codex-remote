@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.3 - 2026-10-09
+
+- Add a Latest message button to the active chat menu, selection confirmation, status and message-delivery screens.
+- Bind the button to the original conversation so an older menu still reads the correct chat after switching.
+
 ## 0.7.2 - 2026-10-09
 
 - Compact live snapshots retain messages, questions, active approval details and control context while keeping old tool output on Windows.

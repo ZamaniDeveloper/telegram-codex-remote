@@ -92,7 +92,7 @@ export class Bridge {
     if (row.title) w.title = row.title;
     this.selected = w;
     this.onSelected?.(row);
-    if (notify) await this.tg.send(this.chatId, card('✅ چت انتخاب شد', concatRich(styled(row.title || 'Codex'), '\n\n📁 پروژه: ', w.state.cwd || 'بدون پروژه', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض'), 'پیام بعدی به همین چت می‌رود.'), chatKeyboard());
+    if (notify) await this.tg.send(this.chatId, card('✅ چت انتخاب شد', concatRich(styled(row.title || 'Codex'), '\n\n📁 پروژه: ', w.state.cwd || 'بدون پروژه', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض'), 'پیام بعدی به همین چت می‌رود.'), chatKeyboard(w.id));
   }
   waitSnapshot(w) {
     return new Promise((resolve, reject) => {
@@ -143,7 +143,7 @@ export class Bridge {
       const w = this.requireSelected(); const turn = lastTurn(w.state);
       if (command === 'status') return this.tg.send(this.chatId, card('📊 وضعیت Codex', concatRich(styled(w.title || 'چت'), '\n\n',
         '⚡ وضعیت: ', turn?.status === 'inProgress' ? 'در حال کار' : 'آماده', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض', '\n📁 پروژه: ', w.state.cwd || 'بدون پروژه',
-        '\n❓ سؤال‌های باز: ', String(this.questions.eligible().filter(s => s.threadId === w.id).length), '\n🔐 درخواست‌های تأیید: ', String(pendingRequests(w.state).filter(r => r.method.endsWith('requestApproval')).length))), chatKeyboard());
+        '\n❓ سؤال‌های باز: ', String(this.questions.eligible().filter(s => s.threadId === w.id).length), '\n🔐 درخواست‌های تأیید: ', String(pendingRequests(w.state).filter(r => r.method.endsWith('requestApproval')).length))), chatKeyboard(w.id));
       if (command === 'history') {
         const turns = turnsOf(w.state).slice(-3).filter(t => assistantText(t));
         if (!turns.length) return this.tg.send(this.chatId, card('🗂 پاسخ‌های اخیر', 'پاسخی در بخش بارگذاری‌شدهٔ تاریخچه نیست.'), navKeyboard());
@@ -156,7 +156,7 @@ export class Bridge {
       throw Error('دستور شناخته نشد. /help');
     }
     await this.sendInput([{ type: 'text', text }]);
-    return this.tg.send(this.chatId, card('📨 پیام ارسال شد', `Codex در چت «${this.selected.title || 'چت'}» درخواستت را دریافت کرد.`), chatKeyboard());
+    return this.tg.send(this.chatId, card('📨 پیام ارسال شد', `Codex در چت «${this.selected.title || 'چت'}» درخواستت را دریافت کرد.`), chatKeyboard(this.selected.id));
   }
   readyToSend(expectedThreadId) {
     const w = this.requireSelected();
