@@ -7,9 +7,10 @@ import { card, splitRich, markdown } from './format.mjs';
 import { text as T } from './feature-text.mjs';
 import { messageFromItem } from './latest-message.mjs';
 
-const ROUTES = ['last', 'newchat', 'projects', 'newproject', 'models', 'compat'];
+export const ROUTES = ['last', 'newchat', 'projects', 'newproject', 'models', 'compat'];
 const b = (text, callback_data) => ({ text, callback_data });
-export const featureRows = () => [[T.last, T.newchat], [T.projects, T.newproject], [T.models, T.compat]];
+export const featureMenuRows = () => [[b(T.last, 'u:last-list'), b(T.newchat, 'u:newchat')], [b(T.projects, 'u:projects'), b(T.newproject, 'u:newproject')], [b(T.models, 'u:models'), b(T.compat, 'u:compat')]];
+export const featureRows = () => featureMenuRows().map(row => row.map(item => item.text));
 export function latestMessage(state) {
   for (const turn of [...turnsOf(state)].reverse()) for (const item of [...(turn.items || [])].reverse()) {
     const message = messageFromItem(item); if (message) return message;

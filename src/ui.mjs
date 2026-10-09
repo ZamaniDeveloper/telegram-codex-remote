@@ -4,10 +4,10 @@ import { isForwarded, messageFile } from './inbox.mjs';
 import { lastTurn, turnId } from './state.mjs';
 import path from 'node:path';
 import { QuotaUi } from './quota-ui.mjs';
-import { Features, featureRows } from './features.mjs';
+import { Features, featureRows, featureMenuRows, ROUTES as FEATURE_ROUTES } from './features.mjs';
 import { text as T } from './feature-text.mjs';
 
-export const UI_REVISION = 7;
+export const UI_REVISION = 8;
 export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
@@ -18,6 +18,16 @@ export function button(text, callback_data, style) { return { text, callback_dat
 export function mainKeyboard() {
   return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.help], [LABELS.queue], [LABELS.home]].map(row => row.map(text => ({ text }))),
     resize_keyboard: true, is_persistent: true, input_field_placeholder: 'پیام بنویس یا از دکمه‌ها استفاده کن' };
+}
+export function mainInlineKeyboard() {
+  return { inline_keyboard: [
+    [button(LABELS.chats, 'u:chats', 'primary'), button(LABELS.search, 'u:search')],
+    ...featureMenuRows(),
+    [button(LABELS.status, 'u:status'), button(LABELS.history, 'u:history')],
+    [button(LABELS.bundle, 'u:bundle'), button(LABELS.questions, 'u:questions')],
+    [button(LABELS.queue, 'u:queue'), button(LABELS.usage, 'u:usage')],
+    [button(LABELS.help, 'u:help')],
+  ] };
 }
 export function navKeyboard() { return { inline_keyboard: [[button('💬 چت‌ها', 'u:chats', 'primary'), button('🏠 منوی اصلی', 'u:home')]] }; }
 export function chatKeyboard(threadId) {
@@ -36,12 +46,13 @@ export class BotUi {
   cancelInput() { if (this.input) this.input.used = true; this.input = null; }
   async home(updated = false) {
     this.cancelInput(); this.features.cancelInput(); const w = this.bridge.selected;
+    if (updated) await this.tg.send(this.chatId, '⌨️ دکمه‌های دسترسی سریع آماده‌اند؛ امکانات کامل زیر پیام منوی اصلی هستند.', mainKeyboard());
     const body = concatRich(updated ? 'رابط جدید آماده است ✨\n\n' : '',
       styled('💬 چت فعال: '), w?.title || 'هنوز انتخاب نشده', '\n',
       styled('🔗 اتصال: '), w?.synced ? 'متصل به Codex' : 'چت را از دکمهٔ «چت‌ها» انتخاب کن', '\n',
       styled('📦 ارسال‌گروهی‌پیام‌ها: '), this.inbox.current ? `${this.inbox.current.items.length} پیام آماده` : 'بسته‌ای باز نیست',
       '\n\nپیام‌ها و پیوست‌ها را بفرست؛ پاسخ‌ها و سؤال‌های Codex همین‌جا نمایش داده می‌شوند.');
-    return this.tg.send(this.chatId, card('🤖 TeleCodex', body, 'از دکمه‌های پایین استفاده کن.'), mainKeyboard());
+    return this.tg.send(this.chatId, card('🤖 منوی اصلی TeleCodex', body, 'گزینهٔ موردنظر را از دکمه‌های زیر همین پیام انتخاب کن.'), mainInlineKeyboard());
   }
   async help() {
     return this.tg.send(this.chatId, card('✨ راهنمای ربات', concatRich(
@@ -73,6 +84,8 @@ export class BotUi {
     this.cancelInput(); this.features.cancelInput();
     if (route === 'home' || route === 'start') return this.home();
     if (route === 'help') return this.help();
+    if (route === 'last-list') return this.features.route('last');
+    if (FEATURE_ROUTES.includes(route) && route !== 'last') return this.features.route(route);
     if (route === 'usage') return this.quota.show();
     if (route === 'queue') {
       if (!this.bridge.outbox) throw Error('صف ارسال در دسترس نیست.');
@@ -103,7 +116,7 @@ export class BotUi {
       return this.features.showLast(this.bridge.watched.get(last[1]) || { id: last[1] });
     }
     const route = data.slice(2);
-    if (!['home', 'help', 'chats', 'last', 'queue', 'search', 'status', 'history', 'stop', 'questions', 'bundle', 'batch', 'instruction', 'steer', 'usage'].includes(route)) throw Error('دکمه معتبر نیست.');
+    if (!['home', 'help', 'chats', 'last', 'last-list', 'queue', 'search', 'status', 'history', 'stop', 'questions', 'bundle', 'batch', 'instruction', 'steer', 'usage', ...FEATURE_ROUTES].includes(route)) throw Error('دکمه معتبر نیست.');
     return this.route(route);
   }
   async consumePrompt(input, text) {

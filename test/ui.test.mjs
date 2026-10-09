@@ -69,7 +69,8 @@ test('Markdown entities preserve Persian, emoji, code and hostile HTML without p
 });
 test('persistent buttons, search prompt and forwarded button labels route correctly', async t => {
   const { ui, tg, searches, ipc, inbox } = await fixture(t);
-  await ui.home(); assert.equal(tg.sent[0].markup.is_persistent, true);
+  await ui.home(true); assert.equal(tg.sent[0].markup.is_persistent, true);
+  assert.ok(tg.sent.at(-1).markup.inline_keyboard.flat().some(b => b.callback_data === 'u:chats'));
   await ui.message({ text: LABELS.search }); await ui.message({ text: 'پروژه من' }); assert.equal(searches[0][0], 'پروژه من');
   await ui.message({ message_id: 9, text: LABELS.chats, forward_origin: { type: 'hidden_user' } });
   assert.equal(inbox.current.items[0].text, LABELS.chats); assert.equal(ipc.calls.length, 0);

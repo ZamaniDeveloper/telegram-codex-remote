@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5 - 2026-10-09
+
+- Attach the full main menu directly to the /menu and Home message, so controls remain visible when Telegram hides the reply keyboard.
+- Add durable inline navigation to chats, search, latest-message picker, creation, projects, models, compatibility, history, groups, questions, queue, usage and help.
+- Keep quick-access reply buttons installed separately on UI upgrade; preserve chat selection and collected messages during navigation.
+- Cover each main-menu action, hidden-keyboard entry points, expired acknowledgements and cancelled prompts with regression tests.
+
 ## 0.7.4 - 2026-10-09
 
 - Persist ordinary messages and submitted groups in a per-conversation FIFO send queue while Codex is working; dispatch the next request only after its predecessor is observed complete.

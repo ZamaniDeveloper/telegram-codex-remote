@@ -31,12 +31,12 @@ test('main menu overrides creation ForceReply, retires its prompt and preserves 
   const f = await fixture(t); f.inbox.begin(); const bundle = f.inbox.current;
   await f.ui.features.prompt('chat', { projectId: randomUUID() }); const promptId = f.sent.length;
   await f.ui.message({ text: LABELS.home, reply_to_message: { message_id: promptId } });
-  assert.equal(f.ui.features.input, null); assert.equal(f.sent.at(-1).markup.is_persistent, true);
+  assert.equal(f.ui.features.input, null); assert.ok(f.sent.at(-1).markup.inline_keyboard.flat().some(b => b.callback_data === 'u:chats'));
   assert.equal(f.inbox.current, bundle); assert.equal(bundle.items.length, 0);
   await assert.rejects(f.ui.message({ text: 'Old title', reply_to_message: { message_id: promptId } }));
   for (const text of ['/menu', '/home@ExampleBot']) {
     await f.ui.features.prompt('project'); await f.ui.message({ text });
-    assert.equal(f.ui.features.input, null); assert.equal(f.sent.at(-1).markup.is_persistent, true);
+    assert.equal(f.ui.features.input, null); assert.ok(f.sent.at(-1).markup.inline_keyboard.flat().some(b => b.callback_data === 'u:chats'));
   }
   assert.equal(f.calls.length, 0);
 });
@@ -44,7 +44,7 @@ test('main menu overrides creation ForceReply, retires its prompt and preserves 
 test('inline main menu works after expired callback acknowledgement and cancels search Reply', async t => {
   const f = await fixture(t); await f.ui.prompt('search'); const promptId = f.sent.length;
   await dispatchCallback({ id: 'expired', data: 'u:home' }, f.tg, f.ui, f.inbox, f.bridge);
-  assert.equal(f.sent.at(-1).markup.is_persistent, true); assert.equal(f.ui.input, null);
+  assert.ok(f.sent.at(-1).markup.inline_keyboard.flat().some(b => b.callback_data === 'u:chats')); assert.equal(f.ui.input, null);
   await assert.rejects(f.ui.message({ text: 'Old search', reply_to_message: { message_id: promptId } }));
   let executions = 0;
   await assert.rejects(dispatchCallback({ id: 'expired', data: 'u:home' }, f.tg, { callback() { executions++; throw Error('action failure'); } }, {}, {}), /action failure/);
