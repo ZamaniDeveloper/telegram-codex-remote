@@ -97,7 +97,7 @@ export class Accounts {
       let current = await this.current();
       if ((current?.key || null) !== value.expectedCurrentKey) throw Error('The active account changed. Reopen Accounts before switching.');
       if (current?.key === value.key) return { outcome: 'unchanged', account: { key: current.key, email: current.email, planType: current.planType } };
-      this.busy = true; let stopped = false, changed = false, stopAttempted = false, config, before;
+      this.busy = true; let stopped = false, changed = false, stopAttempted = false, config, before, phase = 'preparing', recoveryPhase = null;
       try {
         const bytes = await this.freshAccount(value.key, value.requestId), desktop = await this.runtime.inspect();
         if (!desktop?.pid) throw Error('Open Codex on Windows before switching accounts.');
@@ -109,11 +109,14 @@ export class Accounts {
         current = previous;
         config = await optional(path.join(this.home, 'config.toml'));
         await writeFile(journal, JSON.stringify({ key: value.key, status: 'activating', previousKey: previous?.key || null }), { flag: 'wx', mode: 0o600 });
-        stopAttempted = true; await this.runtime.stop(desktop.pid); stopped = true;
+        phase = 'stopping'; stopAttempted = true; await this.runtime.stop(desktop.pid); stopped = true;
+        phase = 'backingUp';
         await this.runtime.backup(path.join(this.root, 'operations', value.requestId));
+        phase = 'writingCredentials';
         await this.writeAuth(bytes); changed = true;
         await writeFile(path.join(this.home, 'config.toml'), fileStoreConfig(config?.toString('utf8') || ''), { mode: 0o600 });
-        stopped = false; await this.runtime.start();
+        phase = 'starting'; stopped = false; await this.runtime.start();
+        phase = 'verifying';
         assertRetained(before, await this.runtime.inventory());
         const active = await this.current();
         if (active?.key !== value.key) throw Error('The new account was not verified.');
@@ -122,17 +125,23 @@ export class Accounts {
       } catch (e) {
         // Rollback only after a stopped desktop: never replace credentials below
         // an active process. Retain the journal if recovery cannot be verified.
-        let recovered = !changed;
+        let recovered = !changed, recoveryCode = null;
         try {
+          recoveryPhase = 'stopping';
           if (changed) { if (!stopped) { const desktop = await this.runtime.inspect(); if (desktop) { if (await this.runtime.busy()) throw Error('Recovery requires idle Codex.'); await this.runtime.stop(desktop.pid); } stopped = true; }
+            recoveryPhase = 'restoringCredentials';
             if (current) await this.writeAuth(current.bytes); else await rm(path.join(this.home, 'auth.json'), { force: true });
             if (config) await writeFile(path.join(this.home, 'config.toml'), config, { mode: 0o600 }); else await rm(path.join(this.home, 'config.toml'), { force: true }); recovered = true;
           }
           if (stopAttempted && !changed && !stopped && !await this.runtime.inspect()) stopped = true;
-          if (stopped) { stopped = false; await this.runtime.start(); }
+          if (stopped) { recoveryPhase = 'starting'; stopped = false; await this.runtime.start(); }
+          recoveryPhase = 'verifying';
           if (stopAttempted && before) assertRetained(before, await this.runtime.inventory());
-        } catch { recovered = false; }
-        if (await optional(journal)) await writeFile(journal, JSON.stringify({ key: value.key, status: recovered ? 'failed' : 'uncertain', previousKey: current?.key || null }), { mode: 0o600 });
+          if (changed && (await this.current())?.key !== (current?.key || undefined)) throw Error('Recovered account identity was not verified.');
+        } catch (recoveryError) { recovered = false; recoveryCode = diagnosticCode(recoveryError); }
+        // Persist only phases and allow-listed codes, never raw authentication
+        // errors or token-bearing server payloads.
+        if (await optional(journal)) await writeFile(journal, JSON.stringify({ key: value.key, status: recovered ? 'failed' : 'uncertain', previousKey: current?.key || null, phase, errorCode: diagnosticCode(e), recoveryPhase, recoveryCode, updatedAt: new Date().toISOString() }), { mode: 0o600 });
         if (!recovered) throw Error('Account activation needs recovery on Windows. Requests were not retried; inspect Codex and the account screen.');
         throw e;
       } finally { this.busy = false; }
@@ -140,4 +149,7 @@ export class Accounts {
   }
   async writeAuth(bytes) { const file = path.join(this.home, 'auth.json'); await writeFile(file + '.telecodex.tmp', bytes, { mode: 0o600 }); await rename(file + '.telecodex.tmp', file); }
   async close() { if (this.pending && ['starting', 'waiting'].includes(this.pending.status)) await this.serial(() => this.cancelPending(this.pending, 'cancelled')); }
+}
+function diagnosticCode(error) {
+  return /^CODEX_(RECONNECT_TIMEOUT|DESKTOP_(INSPECT|START|STOP)_FAILED)$/.test(error?.code || '') ? error.code : 'ACCOUNT_OPERATION_FAILED';
 }

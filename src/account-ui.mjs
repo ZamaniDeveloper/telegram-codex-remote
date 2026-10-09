@@ -70,6 +70,11 @@ export class AccountUi {
           const selected = this.bridge.selected;
           if (selected) await this.bridge.select({ id: selected.id, title: selected.title }, { notify: false }).catch(() => {});
         }
+      } catch (e) {
+        if (e.message?.includes('Account activation needs recovery')) throw Error(T.recovery);
+        if (e.message?.includes('startup deadline')) throw Error(T.startFailedRecovered);
+        if (e.message?.includes('uncertain or failed outcome')) throw Error(T.inspectPreviousAttempt);
+        throw e;
       } finally { this.bridge.accountSwitching = false; }
       return;
     }

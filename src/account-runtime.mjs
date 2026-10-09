@@ -34,23 +34,31 @@ export function fileStoreConfig(text) {
   return (head.match(/^\s*cli_auth_credentials_store\s*=/m) ? head.replace(/^\s*cli_auth_credentials_store\s*=.*$/m, 'cli_auth_credentials_store = "file"') : 'cli_auth_credentials_store = "file"\n' + head) + tail;
 }
 export class WindowsAccountRuntime {
-  constructor(home, ipc) { this.home = home; this.ipc = ipc; }
+  constructor(home, ipc, { reconnectTimeoutMs = 60000, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+    this.home = home; this.ipc = ipc; this.reconnectTimeoutMs = reconnectTimeoutMs; this.now = now; this.sleep = sleep;
+  }
   busy() { return localBusy(this.home); }
   inventory() { return inventory(this.home); }
   async desktop(op, pid) {
     if (process.platform !== 'win32') throw Error('Account switching requires the Windows connector.');
-    const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', fileURLToPath(new URL('../scripts/account-desktop.ps1', import.meta.url)), '-Operation', op, ...(pid ? ['-DesktopPid', String(pid)] : [])], { windowsHide: true, timeout: 20000, maxBuffer: 65536 }).catch(() => { throw Error('Codex desktop operation failed; check the Windows connector.'); });
+    const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', fileURLToPath(new URL('../scripts/account-desktop.ps1', import.meta.url)), '-Operation', op, ...(pid ? ['-DesktopPid', String(pid)] : [])], { windowsHide: true, timeout: 20000, maxBuffer: 65536 }).catch(() => { throw Object.assign(Error('Codex desktop operation failed; check the Windows connector.'), { code: 'CODEX_DESKTOP_' + op.toUpperCase() + '_FAILED' }); });
     return JSON.parse(stdout);
   }
   inspect() { return this.desktop('inspect'); }
   async stop(pid) { if (await this.busy()) throw Error('Codex started working; switch cancelled before closing the desktop.'); await this.desktop('stop', pid); this.ipc?.close(); }
   async start() {
-    await this.desktop('start');
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await new Promise(r => setTimeout(r, 1000));
+    // Electron can open well before its IPC server is ready. ENOENT on a named
+    // pipe fails immediately, so an attempt count is not a startup deadline.
+    // Recovery may find a desktop that launched successfully but is still
+    // starting; attach to it without launching a second instance.
+    if (!await this.inspect()) await this.desktop('start');
+    const deadline = this.now() + this.reconnectTimeoutMs;
+    while (this.now() < deadline) {
       try { await this.ipc.connect(); return; } catch {}
+      const remaining = deadline - this.now();
+      if (remaining > 0) await this.sleep(Math.min(1000, remaining));
     }
-    throw Error('Codex did not reconnect after the account change.');
+    throw Object.assign(Error('Codex did not reconnect within the startup deadline after the account change.'), { code: 'CODEX_RECONNECT_TIMEOUT' });
   }
   async backup(root) {
     await mkdir(root, { recursive: true, mode: 0o700 });

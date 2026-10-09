@@ -1,4 +1,4 @@
-# Accounts from Telegram (0.8.0)
+# Accounts from Telegram (0.8.1)
 
 TeleCodex adds and manually switches managed ChatGPT accounts on the Windows computer while keeping the same local Codex home, project folders and local chat databases. Cloud projects and account entitlements stay account-specific. Continuing every existing conversation under a second real account has not yet been verified.
 
@@ -26,3 +26,5 @@ The connector checks latest local turn activity, blocks competing requests, and 
 Activation uses a durable one-shot journal. A completed duplicate returns its saved result. An ambiguous request is never replayed automatically. Startup failure attempts to restore the previous account/configuration and reopen Codex. If recovery cannot be verified, preserve the private operation backup and inspect Windows before trying again. Actual account switching and conversation resumption require the owner's first sign-in to a second account and subsequent live verification.
 
 References: [OpenAI app-server authentication](https://learn.chatgpt.com/docs/app-server), [device-code login and credential storage](https://learn.chatgpt.com/docs/auth).
+
+Desktop startup waits for IPC readiness for up to 60 seconds rather than counting immediate pipe failures. A desktop already launched during recovery is reused. The remote activation call allows five minutes for preparation, startup and rollback; it is never retried automatically. Failed journals record only operation phases and safe error codes. After a recovered failure, refresh Accounts before selecting the destination again.

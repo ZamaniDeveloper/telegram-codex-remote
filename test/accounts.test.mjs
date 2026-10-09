@@ -10,7 +10,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Accounts } from '../src/accounts.mjs';
 import { AccountVault, cacheIdentity, windowsVault } from '../src/account-vault.mjs';
-import { localBusy, fileStoreConfig } from '../src/account-runtime.mjs';
+import { localBusy, fileStoreConfig, WindowsAccountRuntime } from '../src/account-runtime.mjs';
 import { LoginRpc } from '../src/account-rpc.mjs';
 import { AccountUi } from '../src/account-ui.mjs';
 import { Outbox } from '../src/outbox.mjs';
@@ -85,6 +85,40 @@ test('desktop restart failure restores previous credentials and config and canno
   const value = { key: second.key, expectedCurrentKey: first.current.key, requestId: randomUUID() };
   await assert.rejects(f.accounts.activate(value), /Fixture restart failure/);
   assert.equal((await f.accounts.read()).current.key, first.current.key); assert.deepEqual(await readFile(path.join(f.home, 'config.toml')), original); assert.equal(f.accounts.busy, false);
+  await assert.rejects(f.accounts.activate(value), /uncertain or failed outcome/);
+});
+test('desktop startup waits for a slow named pipe instead of giving up after four immediate failures', async () => {
+  let time = 0, launched = 0, attempts = 0;
+  const ipc = { async connect() { attempts++; if (time < 15000) throw Error('ENOENT'); } };
+  const runtime = new WindowsAccountRuntime('fixture', ipc, { now: () => time, sleep: async ms => { time += ms; } });
+  runtime.inspect = async () => null;
+  runtime.desktop = async op => { assert.equal(op, 'start'); launched++; };
+  await runtime.start();
+  assert.equal(time, 15000); assert.ok(attempts > 4); assert.equal(launched, 1);
+});
+test('reconnection to an already running desktop does not launch or stop it again', async () => {
+  let time = 0;
+  const runtime = new WindowsAccountRuntime('fixture', { async connect() { if (time < 12000) throw Error('ENOENT'); } }, { now: () => time, sleep: async ms => { time += ms; } });
+  runtime.inspect = async () => ({ pid: 123 });
+  runtime.desktop = async () => assert.fail('Already launched desktop must be reused');
+  await runtime.start(); assert.equal(time, 12000);
+});
+test('permanently unavailable desktop has a bounded startup deadline and a safe diagnostic code', async () => {
+  let time = 0, launched = 0;
+  const runtime = new WindowsAccountRuntime('fixture', { async connect() { throw Error('ENOENT'); } }, { now: () => time, sleep: async ms => { time += ms; }, reconnectTimeoutMs: 60000 });
+  runtime.inspect = async () => null; runtime.desktop = async () => { launched++; };
+  await assert.rejects(runtime.start(), { code: 'CODEX_RECONNECT_TIMEOUT' });
+  assert.equal(time, 60000); assert.equal(launched, 1);
+});
+test('failed recovery records startup phase and safe codes without raw credential errors', async t => {
+  const f = await fixture(t), first = await f.accounts.read(), second = await f.vault.save(cache('second@example.invalid'));
+  f.runtime.start = async () => { throw Object.assign(Error('secret authentication payload'), { code: 'CODEX_RECONNECT_TIMEOUT' }); };
+  const value = { key: second.key, expectedCurrentKey: first.current.key, requestId: randomUUID() };
+  await assert.rejects(f.accounts.activate(value), /needs recovery/);
+  const journal = await readFile(path.join(f.vault.root, 'operations', value.requestId + '.json'), 'utf8');
+  assert.ok(!journal.includes('secret')); assert.equal((await f.accounts.read()).current.key, first.current.key);
+  const record = JSON.parse(journal); assert.equal(record.phase, 'starting'); assert.equal(record.recoveryPhase, 'starting');
+  assert.equal(record.errorCode, 'CODEX_RECONNECT_TIMEOUT'); assert.equal(record.recoveryCode, 'CODEX_RECONNECT_TIMEOUT');
   await assert.rejects(f.accounts.activate(value), /uncertain or failed outcome/);
 });
 test('activity guard considers only the latest turn in every conversation', async t => {

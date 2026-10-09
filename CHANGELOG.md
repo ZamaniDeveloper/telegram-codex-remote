@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 - 2026-10-09
+
+- Wait up to a minute for desktop IPC readiness after switching, including immediate named-pipe failures during slow startup.
+- Reconnect to an already launched desktop without launching a second instance.
+- Allow the remote activation request to finish startup and verified rollback; preserve one-shot request journals.
+- Verify the restored account identity and record safe failure phases/codes without credential payloads.
+- Localize recovery guidance and cover slow startup, bounded failure and recovery diagnostics.
+
 ## 0.8.0 - 2026-10-09
 
 - Add Accounts and `/accounts` for phone device-code login and confirmed manual switching.
