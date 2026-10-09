@@ -35,3 +35,9 @@ Both bot and connector must be updated together. Preserve `.env`, `.connector.en
 TeleCodex's custom license applies to this repository's original code. It does not replace the independent licenses of downloaded packages and models. [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and [OpenAI Whisper](https://github.com/openai/whisper) use MIT licenses; retain their notices when redistributing those components. See the package/model licenses for other dependencies. Models, virtual environments, credentials and received files are excluded from TeleCodex source releases.
 
 Protocol reference: [official Codex app-server documentation](https://learn.chatgpt.com/docs/app-server). Project methods are experimental and private desktop IPC remains version dependent.
+
+### Send queue and Group message sending
+
+Ordinary messages and submitted groups are stored in a durable FIFO queue while their conversation is working. After completion, requests are sent in order; each waits for the preceding request to finish. Switching chats keeps the original destination, and the queue survives bot restart. Use **Send queue** or `/queue` to browse and remove waiting requests. Question answers and `/steer` remain immediate. Forwarded messages and files are collected under **Group message sending**; `/send` submits them together as one request or queued entry.
+
+The queue holds up to 100 requests / 8 MiB of message metadata; original attachments stay on Windows. Ambiguous delivery pauses that conversation without automatic replay: check Codex before removing the uncertain entry. Windows, Codex and the connector must be available to drain the queue.

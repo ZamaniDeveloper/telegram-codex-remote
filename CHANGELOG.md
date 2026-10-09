@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.4 - 2026-10-09
+
+- Persist ordinary messages and submitted groups in a per-conversation FIFO send queue while Codex is working; dispatch the next request only after its predecessor is observed complete.
+- Preserve the destination through chat switches and restarts, deduplicate submission IDs, and pause ambiguous deliveries without automatic replay.
+- Add queue browsing, pagination and removal controls; questions and steering remain immediate.
+- Rename the grouping entry to Group message sending; preserve old keyboard shortcuts.
+- Include the conversation-bound Latest message button introduced in 0.7.3.
+
 ## 0.7.3 - 2026-10-09
 
 - Add a Latest message button to the active chat menu, selection confirmation, status and message-delivery screens.

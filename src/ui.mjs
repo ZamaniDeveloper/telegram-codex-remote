@@ -7,24 +7,24 @@ import { QuotaUi } from './quota-ui.mjs';
 import { Features, featureRows } from './features.mjs';
 import { text as T } from './feature-text.mjs';
 
-export const UI_REVISION = 6;
+export const UI_REVISION = 7;
 export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
-  bundle: '📦 بسته پیام‌ها', questions: '❓ سؤال‌های Codex', home: '🏠 منوی اصلی', help: 'ℹ️ راهنما',
-  usage: '📈 سهمیه',
+  bundle: '📦 ارسال‌گروهی‌پیام‌ها', questions: '❓ سؤال‌های Codex', home: '🏠 منوی اصلی', help: 'ℹ️ راهنما',
+  usage: '📈 سهمیه', queue: '⏳ صف ارسال',
 };
 export function button(text, callback_data, style) { return { text, callback_data, ...(style ? { style } : {}) }; }
 export function mainKeyboard() {
-  return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.help], [LABELS.home]].map(row => row.map(text => ({ text }))),
+  return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.help], [LABELS.queue], [LABELS.home]].map(row => row.map(text => ({ text }))),
     resize_keyboard: true, is_persistent: true, input_field_placeholder: 'پیام بنویس یا از دکمه‌ها استفاده کن' };
 }
 export function navKeyboard() { return { inline_keyboard: [[button('💬 چت‌ها', 'u:chats', 'primary'), button('🏠 منوی اصلی', 'u:home')]] }; }
 export function chatKeyboard(threadId) {
   return { inline_keyboard: [
     [button('📊 وضعیت', 'u:status'), button('🗂 پاسخ‌های اخیر', 'u:history')],
-    [button(T.last, threadId ? `u:last:${threadId}` : 'u:last')],
-    [button('📦 بسته پیام‌ها', 'u:bundle'), button('❓ سؤال‌ها', 'u:questions', 'primary')],
+    [button(T.last, threadId ? `u:last:${threadId}` : 'u:last'), button(LABELS.queue, 'u:queue')],
+    [button(LABELS.bundle, 'u:bundle'), button('❓ سؤال‌ها', 'u:questions', 'primary')],
     [button('📈 سهمیه و اعتبار ریست', 'u:usage', 'primary')],
     [button('✍️ راهنمایی حین کار', 'u:steer'), button('⏹ توقف', 'u:stop', 'danger')],
     [button('💬 تغییر چت', 'u:chats'), button('🏠 منوی اصلی', 'u:home')],
@@ -39,14 +39,14 @@ export class BotUi {
     const body = concatRich(updated ? 'رابط جدید آماده است ✨\n\n' : '',
       styled('💬 چت فعال: '), w?.title || 'هنوز انتخاب نشده', '\n',
       styled('🔗 اتصال: '), w?.synced ? 'متصل به Codex' : 'چت را از دکمهٔ «چت‌ها» انتخاب کن', '\n',
-      styled('📦 بسته: '), this.inbox.current ? `${this.inbox.current.items.length} پیام آماده` : 'بسته‌ای باز نیست',
+      styled('📦 ارسال‌گروهی‌پیام‌ها: '), this.inbox.current ? `${this.inbox.current.items.length} پیام آماده` : 'بسته‌ای باز نیست',
       '\n\nپیام‌ها و پیوست‌ها را بفرست؛ پاسخ‌ها و سؤال‌های Codex همین‌جا نمایش داده می‌شوند.');
     return this.tg.send(this.chatId, card('🤖 TeleCodex', body, 'از دکمه‌های پایین استفاده کن.'), mainKeyboard());
   }
   async help() {
     return this.tg.send(this.chatId, card('✨ راهنمای ربات', concatRich(
       styled('۱. انتخاب چت\n'), 'دکمهٔ «چت‌ها» را بزن و یکی از چت‌های فعلی را انتخاب کن.\n\n',
-      styled('۲. فرستادن پیام و فایل\n'), 'پیام معمولی مستقیم ارسال می‌شود. فورواردها، تصویرها و فایل‌ها در بسته جمع می‌شوند؛ با دکمهٔ ارسال بسته همه را یکجا بفرست.\n\n',
+      styled('۲. فرستادن پیام و فایل\n'), 'پیام معمولی به چت فعال ارسال می‌شود؛ هنگام اجرای کار در صف می‌ماند و پس از پایان، به‌ترتیب ارسال می‌شود. از «صف ارسال» پیام‌های منتظر را ببین یا حذف کن. فورواردها، تصویرها و فایل‌ها در «ارسال‌گروهی‌پیام‌ها» جمع می‌شوند؛ با دکمهٔ ارسال همه را یکجا بفرست.\n\n',
       styled('۳. کنترل کار\n'), 'زیر پاسخ زنده، دکمه‌های توقف و راهنمایی حین کار را می‌بینی.\n\n',
       styled('۴. پاسخ به سؤال\n'), 'گزینه را انتخاب کن یا روی پیام سؤال Reply بزن و پاسخت را بنویس. پاسخ آزاد بدون نوشتن دستور هم پذیرفته می‌شود.\n\n',
       styled('۵. سهمیه و ریست\n'), 'دکمهٔ «سهمیه» مصرف و زمان بازنشانی را نشان می‌دهد. اگر اعتبار ریست موجود باشد، دکمهٔ آن نمایش داده می‌شود؛ مصرف اعتبار با تأیید تو انجام می‌شود.\n\n',
@@ -55,7 +55,7 @@ export class BotUi {
   }
   async bundle() {
     if (this.inbox.current) return this.inbox.notice(true);
-    return this.tg.send(this.chatId, card('📦 بسته پیام‌ها', 'چند متن، تصویر و فایل را در یک درخواست بفرست.\n\nفورواردها خودکار جمع می‌شوند. برای جمع‌کردن چند متن مستقیم، «بسته جدید» را بزن.'),
+    return this.tg.send(this.chatId, card(LABELS.bundle, 'چند متن، تصویر و فایل را در یک درخواست بفرست.\n\nفورواردها خودکار جمع می‌شوند. برای جمع‌کردن چند متن مستقیم، «بسته جدید» را بزن.'),
       { inline_keyboard: [[button('➕ بسته جدید', 'u:batch', 'primary')], [button('🏠 منوی اصلی', 'u:home')]] });
   }
   async prompt(kind, context = {}) {
@@ -74,6 +74,10 @@ export class BotUi {
     if (route === 'home' || route === 'start') return this.home();
     if (route === 'help') return this.help();
     if (route === 'usage') return this.quota.show();
+    if (route === 'queue') {
+      if (!this.bridge.outbox) throw Error('صف ارسال در دسترس نیست.');
+      return this.bridge.outbox.show(this.bridge);
+    }
     if (route === 'chats') return this.bridge.chats();
     if (route === 'last') return this.features.showLast(this.bridge.selected || this.bridge.requireSelected());
     if (route === 'search') return this.prompt('search');
@@ -99,7 +103,7 @@ export class BotUi {
       return this.features.showLast(this.bridge.watched.get(last[1]) || { id: last[1] });
     }
     const route = data.slice(2);
-    if (!['home', 'help', 'chats', 'last', 'search', 'status', 'history', 'stop', 'questions', 'bundle', 'batch', 'instruction', 'steer', 'usage'].includes(route)) throw Error('دکمه معتبر نیست.');
+    if (!['home', 'help', 'chats', 'last', 'queue', 'search', 'status', 'history', 'stop', 'questions', 'bundle', 'batch', 'instruction', 'steer', 'usage'].includes(route)) throw Error('دکمه معتبر نیست.');
     return this.route(route);
   }
   async consumePrompt(input, text) {
@@ -115,6 +119,8 @@ export class BotUi {
     if (!isForwarded(message) && !messageFile(message) && message.text) {
       const route = Object.keys(LABELS).find(key => LABELS[key] === message.text.trim());
       if (route) return this.route(route);
+      if (['📦 بسته پیام‌ها', '📦 بستهٔ پیام‌ها'].includes(message.text.trim())) return this.route('bundle');
+      if (/^\/queue(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('queue');
       if (/^\/(usage|quota)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('usage');
       if (/^\/(start|menu|home|help)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route(message.text.trim().startsWith('/help') ? 'help' : 'home');
       if (await this.features.message(message)) return;

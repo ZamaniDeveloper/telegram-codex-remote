@@ -11,6 +11,7 @@ import { Inbox } from './inbox.mjs';
 import { BotUi, UI_REVISION, UI_EDITION } from './ui.mjs';
 import { acquirePidLock } from './pid-lock.mjs';
 import { dispatchCallback } from './callback-dispatch.mjs';
+import { Outbox } from './outbox.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -40,6 +41,7 @@ function attachOwner() {
     const remote = new RemoteDesktop(process.env.CONNECTOR_URL, process.env.CONNECTOR_SECRET);
     bridge = new Bridge(tg, settings.ownerId, remote, (...args) => remote.listThreads(...args));
   } else bridge = new Bridge(tg, settings.ownerId);
+  bridge.outbox = new Outbox(path.join(dataDir, 'outbox.json'));
   restoreSelection = settings.selectedThread || null;
   bridge.onSelected = row => { settings.selectedThread = { id: row.id, title: row.title }; restoreSelection = null; save(); };
   inbox = new Inbox(bridge); ui = new BotUi(bridge, inbox);
@@ -47,7 +49,7 @@ function attachOwner() {
   inbox.onInstruction = batchId => ui.prompt('instruction', { batchId });
 }
 async function setupUi() {
-  const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'بستهٔ پیام‌ها'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
+  const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'ارسال‌گروهی‌پیام‌ها'], ['queue', 'صف ارسال'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
   commands.push(...[['last', 'آخرین پیام هر گفتگو'], ['newchat', 'چت جدید'], ['projects', 'پروژه‌ها'], ['newproject', 'پروژه جدید'], ['models', 'انتخاب مدل و استدلال'], ['compat', 'سازگاری و Whisper']].map(([command, description]) => ({ command, description })));
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
   await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
@@ -75,6 +77,7 @@ try {
         lastRestore = Date.now(); await bridge.select(restoreSelection, { notify: false });
       }
       await bridge.flush();
+      await bridge.outbox.follow(bridge); await bridge.outbox.flush(bridge);
     }
     catch { /* Retry connection/stream sync, never resend a user action. */ }
     finally { flushing = false; }

@@ -8,5 +8,6 @@ export async function dispatchCallback(query, tg, ui, inbox, bridge) {
   if (data.startsWith('f:')) return ui.features.callback(data);
   if (data.startsWith('r:')) return ui.quota.callback(data);
   if (data.startsWith('b:')) return inbox.callback(data);
+  if (data.startsWith('o:')) return bridge.outbox.callback(data, bridge);
   return bridge.callback(data);
 }

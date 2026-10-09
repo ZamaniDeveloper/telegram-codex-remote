@@ -120,7 +120,7 @@ export class Inbox {
   description(draft) {
     const attachments = draft.items.filter(i => i.attachment);
     const preview = draft.items.slice(-5).map((i, n) => `${draft.items.length - Math.min(5, draft.items.length) + n + 1}. ${i.attachment?.name || i.text.replace(/[\r\n]/g, ' ').slice(0, 90)}${i.audio ? '\n🎙 ' + (i.transcript ? i.transcript.slice(0, 500) : i.transcriptionError || 'Whisper: در حال تبدیل صوت…') : ''}`).join('\n');
-    return card('📦 بستهٔ پیام‌ها', concatRich(styled('💬 چت: '), draft.title || 'هنوز انتخاب نشده', '\n', styled(`${draft.items.length} پیام · ${attachments.length} پیوست`),
+    return card('📦 ارسال‌گروهی‌پیام‌ها', concatRich(styled('💬 چت: '), draft.title || 'هنوز انتخاب نشده', '\n', styled(`${draft.items.length} پیام · ${attachments.length} پیوست`),
       preview ? '\n\n' + preview : '\n\nمتن‌ها و پیوست‌ها را بفرست یا فوروارد کن.'), draft.status === 'uncertain' ? '⚠️ نتیجهٔ ارسال قبلی نامشخص است؛ چت Codex را بررسی کن.' : 'پیام‌های بعدی را اضافه کن؛ با دکمه‌ها همه را یکجا بفرست.');
   }
   async notice(force = false) {
@@ -180,7 +180,7 @@ export class Inbox {
     const draft = this.current;
     if (!draft?.items.length) throw Error('بسته خالی است؛ ابتدا متن، تصویر یا فایل بفرست.');
     if (draft.status !== 'ready') throw Error('نتیجهٔ ارسال قبلی نامشخص است؛ چت Codex را بررسی کن. برای حذف این بسته /cancel را بزن.');
-    const selected = this.bridge.readyToSend(draft.threadId);
+    const selected = this.bridge.readyToSubmit ? this.bridge.readyToSubmit(draft.threadId) : this.bridge.readyToSend(draft.threadId);
     if (!draft.threadId) { draft.threadId = selected.id; draft.title = selected.title; }
     const audios = draft.items.filter(item => item.audio && !item.transcript);
     if (audios.length) {
@@ -196,13 +196,18 @@ export class Inbox {
         const a = item.attachment;
         files.set(a.id, await this.transfer({ ...a, batchId: draft.id }, a.cachePath));
       }
-      this.bridge.readyToSend(draft.threadId);
+      this.bridge.readyToSubmit ? this.bridge.readyToSubmit(draft.threadId) : this.bridge.readyToSend(draft.threadId);
     } catch (e) { draft.status = 'ready'; this.save(); throw e; }
     const input = bundleInput(draft, files, instruction);
     draft.status = 'sending'; this.save();
-    try { await this.bridge.sendInput(input, draft.threadId, draft.clientMessageId); }
-    catch { draft.status = 'uncertain'; this.save(); throw Error('نتیجهٔ ارسال بسته نامشخص است. ابتدا چت Codex را بررسی کن؛ ارسال خودکار تکرار نشد. /pending'); }
+    let result;
+    try { result = await this.bridge.sendInput(input, draft.threadId, draft.clientMessageId); }
+    catch (error) {
+      if (error.notDispatched) { draft.status = 'ready'; this.save(); throw error; }
+      draft.status = 'uncertain'; this.save(); throw Error('نتیجهٔ ارسال بسته نامشخص است. ابتدا چت Codex را بررسی کن؛ ارسال خودکار تکرار نشد. /pending');
+    }
     this.current = null; this.dirty = false; this.save(); await this.cleanup(draft);
+    if (result?.queued) return this.bridge.outbox.notice(this.bridge, result.entry);
     return this.tg.send(this.chatId, card('✅ بسته ارسال شد', `${draft.items.length} پیام و ${files.size} پیوست، یکجا به چت «${draft.title}» ارسال شد.`), { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'u:home' }]] });
   }
 }

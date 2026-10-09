@@ -7,8 +7,10 @@ import { applyPatches, lastTurn, assistantText, pendingRequests, turnId, turnsOf
 import { card, concatRich, styled, splitRich, turnCard } from './format.mjs';
 import { chatKeyboard, navKeyboard, button } from './ui.mjs';
 import { QuestionManager } from './questions.mjs';
+import { isBusy } from './outbox.mjs';
+import { text as OUTBOX } from './outbox-text.mjs';
 
-const HELP = `ریموت Codex دسکتاپ\n\n/chats — انتخاب چت فعلی\n/find عبارت — جستجو در چت‌ها و مسیر پروژه\n/status — وضعیت و مدل\n/history — پاسخ‌های اخیر\n/stop — توقف کار همین چت\n/steer متن — اصلاح مسیر حین اجرا\n/answer متن — پاسخ به سؤال باز\n/batch — جمع کردن چند پیام در یک بسته\n/pending — نمایش بسته و پیوست‌ها\n/send توضیح دلخواه — ارسال کل بسته به صورت یک پیام\n/cancel — حذف بستهٔ ارسال‌نشده\n/help — راهنما\n\nپیام فورواردی، فایل و تصویر در بسته جمع می‌شوند. متن معمولی هنگام باز بودن بسته به آن اضافه می‌شود. ارسال نهایی با /send است. تصویرها همراه فایل اصلی به Codex می‌رسند. حداکثر هر فایل ۲۰ مگابایت است.\n\nبعد از انتخاب چت، پیام معمولی بدون بسته به همان چت فرستاده می‌شود. اگر کار در حال اجرا باشد، از /steer استفاده کن. چت‌های بسته هنگام انتخاب در Codex باز می‌شوند.`;
+const HELP = `ریموت Codex دسکتاپ\n\n/chats — انتخاب چت فعلی\n/find عبارت — جستجو در چت‌ها و مسیر پروژه\n/status — وضعیت و مدل\n/history — پاسخ‌های اخیر\n/stop — توقف کار همین چت\n/steer متن — اصلاح مسیر حین اجرا\n/answer متن — پاسخ به سؤال باز\n/batch — جمع کردن چند پیام در یک بسته\n/pending — نمایش بسته و پیوست‌ها\n/send توضیح دلخواه — ارسال کل بسته به صورت یک پیام\n/cancel — حذف بستهٔ ارسال‌نشده\n/help — راهنما\n\nپیام فورواردی، فایل و تصویر در بسته جمع می‌شوند. متن معمولی هنگام باز بودن بسته به آن اضافه می‌شود. ارسال نهایی با /send است. تصویرها همراه فایل اصلی به Codex می‌رسند. حداکثر هر فایل ۲۰ مگابایت است.\n\nبعد از انتخاب چت، پیام معمولی بدون بسته به همان چت فرستاده می‌شود. هنگام اجرای کار، پیام‌های معمولی در صف می‌مانند و پس از پایان به‌ترتیب ارسال می‌شوند. /queue صف را نشان می‌دهد؛ /steer راهنمایی فوری به کار جاری می‌فرستد. چت‌های بسته هنگام انتخاب در Codex باز می‌شوند.`;
 // Desktop 26.1002 reads restoreMessage.cwd/context before dispatching turn/steer.
 // Match its plain-text follow-up shape, including the shared message identity.
 export function steeringParams(w, input) {
@@ -74,7 +76,7 @@ export class Bridge {
     }
     if (epoch !== this.selectionEpoch) return;
     if (!this.watched.has(row.id) && this.watched.size >= 8) {
-      const candidate = [...this.watched.values()].find(w => lastTurn(w.state)?.status !== 'inProgress');
+      const candidate = [...this.watched.values()].find(w => !isBusy(w) && !this.outbox?.has(w.id));
       if (!candidate) throw Error('هشت چت در حال پیگیری هستند؛ ابتدا یکی را به پایان برسان.');
       if (candidate.owner) this.ipc.follow(candidate.id, candidate.owner, false);
       this.watched.delete(candidate.id);
@@ -93,6 +95,20 @@ export class Bridge {
     this.selected = w;
     this.onSelected?.(row);
     if (notify) await this.tg.send(this.chatId, card('✅ چت انتخاب شد', concatRich(styled(row.title || 'Codex'), '\n\n📁 پروژه: ', w.state.cwd || 'بدون پروژه', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض'), 'پیام بعدی به همین چت می‌رود.'), chatKeyboard(w.id));
+  }
+  async watchQueued(row) {
+    if (this.watched.has(row.id)) return;
+    if (this.watched.size >= 8) {
+      const candidate = [...this.watched.values()].find(w => w.id !== this.selected?.id && !isBusy(w) && !this.outbox?.has(w.id));
+      if (!candidate) throw Error('Live chat capacity reached');
+      if (candidate.owner) await this.ipc.follow(candidate.id, candidate.owner, false);
+      this.watched.delete(candidate.id);
+    }
+    const owner = await this.ipc.owner(row.id);
+    const w = { id: row.id, title: row.title, owner, synced: false, revision: null, state: null,
+      messages: new Map(), sentRequests: new Set(), seenTurns: new Set() };
+    this.watched.set(row.id, w);
+    try { await this.ipc.follow(row.id, owner); } catch (error) { w.owner = null; throw error; }
   }
   waitSnapshot(w) {
     return new Promise((resolve, reject) => {
@@ -155,8 +171,9 @@ export class Bridge {
       if (command === 'answer') return this.answer(arg);
       throw Error('دستور شناخته نشد. /help');
     }
-    await this.sendInput([{ type: 'text', text }]);
-    return this.tg.send(this.chatId, card('📨 پیام ارسال شد', `Codex در چت «${this.selected.title || 'چت'}» درخواستت را دریافت کرد.`), chatKeyboard(this.selected.id));
+    const result = await this.sendInput([{ type: 'text', text }]);
+    if (result.queued) return this.outbox.notice(this, result.entry);
+    return this.tg.send(this.chatId, card('📨 پیام ارسال شد', `Codex در چت «${result.title || 'چت'}» درخواستت را دریافت کرد.`), chatKeyboard(result.id));
   }
   readyToSend(expectedThreadId) {
     const w = this.requireSelected();
@@ -164,7 +181,23 @@ export class Bridge {
     if (lastTurn(w.state)?.status === 'inProgress' || w.state.threadRuntimeStatus?.type === 'active') throw Error('Codex در حال کار است؛ برای راهنمایی حین اجرا از /steer متن استفاده کن.');
     return w;
   }
+  readyToSubmit(expectedThreadId) {
+    const w = this.requireSelected();
+    if (expectedThreadId && w.id !== expectedThreadId) throw Error('بسته متعلق به چت دیگری است؛ همان چت را دوباره انتخاب کن یا با /cancel بسته را حذف کن.');
+    if (!this.outbox) return this.readyToSend(expectedThreadId);
+    return w;
+  }
   async sendInput(input, expectedThreadId, clientUserMessageId = randomUUID()) {
+    if (this.outbox) {
+      let w, entry;
+      try { w = this.readyToSubmit(expectedThreadId); entry = this.outbox.enqueue(w, input, clientUserMessageId); }
+      catch (error) { error.notDispatched = true; throw error; }
+      await this.outbox.flush(this, w.id);
+      if (entry.status === 'uncertain') throw Error(OUTBOX.uncertainError);
+      const queued = entry.status === 'queued' || entry.status === 'dispatching';
+      if (queued) { entry.notifyOnDispatch = true; this.outbox.save(); }
+      return { ...w, queued, entry };
+    }
     const w = this.readyToSend(expectedThreadId);
     const request = { threadId: w.id, input, clientUserMessageId };
     await this.ipc.request('thread-follower-start-turn', { conversationId: w.id, turnStart: { request, context: { inheritThreadSettings: true } } }, w.owner, 60000);
