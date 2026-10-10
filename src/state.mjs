@@ -18,12 +18,24 @@ export function applyPatches(value, patches) {
   return value;
 }
 export function turnsOf(state) {
+  let turns;
   if (state?.turnHistory?.kind === 'canonical') {
     const history = state.turnHistory.history;
-    return (history?.islands || []).flatMap(i => (i.entries || []).map(e =>
+    turns = (history?.islands || []).flatMap(i => (i.entries || []).map(e =>
       typeof e.value === 'string' ? history.entitiesByKey?.[e.value] : e.value)).filter(Boolean);
+  } else turns = state?.turns || [];
+  // After a failed start/disconnection the desktop can retain an empty pending
+  // turn without an ID after the completed turn, while runtime is explicitly idle.
+  // Ignore only that confirmed orphan; active/unknown runtime and real turns
+  // remain conservative, and the original patch mirror is never mutated.
+  if (state?.threadRuntimeStatus?.type === 'idle') {
+    let end = turns.length - 1;
+    while (end >= 0 && !turnId(turns[end]) && turns[end].status === 'inProgress'
+      && Array.isArray(turns[end].items) && turns[end].items.length === 0) end--;
+    if (end >= 0 && end < turns.length - 1 && turnId(turns[end])
+      && ['completed', 'failed', 'interrupted'].includes(turns[end].status)) return turns.slice(0, end + 1);
   }
-  return state?.turns || [];
+  return turns;
 }
 export function lastTurn(state) { return turnsOf(state).at(-1); }
 export function turnId(turn) { return turn?.turnId ?? turn?.id; }

@@ -25,8 +25,9 @@ export function steeringParams(w, input) {
 }
 export class Bridge {
   watched = new Map(); actions = new Map(); selected = null; selectionEpoch = 0;
-  constructor(telegram, chatId, ipc = new DesktopIpc(), catalog = listThreads, { snapshotTimeoutMs = 30000 } = {}) {
+  constructor(telegram, chatId, ipc = new DesktopIpc(), catalog = listThreads, { snapshotTimeoutMs = 30000, queuedResyncIntervalMs = 30000 } = {}) {
     this.snapshotTimeoutMs = snapshotTimeoutMs;
+    this.queuedResyncIntervalMs = queuedResyncIntervalMs;
     this.tg = telegram; this.chatId = chatId; this.ipc = ipc; this.catalog = catalog; this.questions = new QuestionManager(this);
     ipc.on('broadcast', m => this.onBroadcast(m));
     ipc.on('disconnected', () => { for (const w of this.watched.values()) { w.owner = null; w.synced = false; } });
@@ -34,8 +35,15 @@ export class Bridge {
   async reconnect() {
     if (this.accountSwitching) return;
     await this.ipc.connect();
-    for (const w of this.watched.values()) if (!w.owner) {
-      try { w.owner = await this.ipc.owner(w.id); await this.ipc.follow(w.id, w.owner); }
+    for (const w of this.watched.values()) {
+      if (w.owner) {
+        // A final notification can be lost without another patch arriving. Read a
+        // fresh snapshot periodically while a queue depends on this conversation.
+        if (this.outbox?.has(w.id) && Date.now() - (w.lastSnapshotAt || 0) >= this.queuedResyncIntervalMs
+          && Date.now() - (w.lastResyncAttempt || 0) >= this.queuedResyncIntervalMs) await this.resync(w);
+        continue;
+      }
+      try { w.owner = await this.ipc.owner(w.id); await this.resync(w); }
       catch {
         w.owner = null;
         // Reopen only the selected existing chat, with bounded URI attempts.
@@ -132,8 +140,13 @@ export class Bridge {
   }
   resync(w) {
     w.synced = false;
-    if (w.resyncing) return;
-    w.resyncing = (async () => { await this.ipc.follow(w.id, w.owner, false); await this.ipc.follow(w.id, w.owner); })().catch(() => {}).finally(() => { w.resyncing = null; });
+    if (w.resyncing) return w.resyncing;
+    const owner = w.owner; w.lastResyncAttempt = Date.now();
+    w.resyncing = (async () => {
+      await this.ipc.follow(w.id, owner, false);
+      if (w.owner === owner) await this.ipc.follow(w.id, owner);
+    })().catch(() => { w.owner = null; w.synced = false; }).finally(() => { w.resyncing = null; });
+    return w.resyncing;
   }
   onBroadcast(m) {
     if (m.params?.hostId !== 'local') return;
@@ -143,7 +156,7 @@ export class Bridge {
     if (m.version !== 11) { w.synced = false; return; }
     const change = m.params.change;
     if (change.type === 'snapshot') {
-      w.state = change.conversationState; w.revision = change.revision; w.synced = true;
+      w.state = change.conversationState; w.revision = change.revision; w.synced = true; w.lastSnapshotAt = Date.now();
       if (!w.initialized) {
         w.initialized = true;
         for (const turn of turnsOf(w.state)) if (turn.status !== 'inProgress') w.seenTurns.add(turnId(turn));
@@ -168,7 +181,7 @@ export class Bridge {
       if (command === 'find') return this.chats(arg);
       const w = this.requireSelected(); const turn = lastTurn(w.state);
       if (command === 'status') return this.tg.send(this.chatId, card('📊 وضعیت Codex', concatRich(styled(w.title || 'چت'), '\n\n',
-        '⚡ وضعیت: ', turn?.status === 'inProgress' ? 'در حال کار' : 'آماده', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض', '\n📁 پروژه: ', w.state.cwd || 'بدون پروژه',
+        '⚡ وضعیت: ', isBusy(w) ? 'در حال کار' : 'آماده', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض', '\n📁 پروژه: ', w.state.cwd || 'بدون پروژه',
         '\n❓ سؤال‌های باز: ', String(this.questions.eligible().filter(s => s.threadId === w.id).length), '\n🔐 درخواست‌های تأیید: ', String(pendingRequests(w.state).filter(r => r.method.endsWith('requestApproval')).length),
         '\n⏳ پیام‌های منتظر این چت: ', String(this.outbox?.count(w.id) || 0), '\n📬 پیام‌های منتظر در کل صف: ', String(this.outbox?.count() || 0))), chatKeyboard(w.id));
       if (command === 'history') {
@@ -189,7 +202,7 @@ export class Bridge {
   readyToSend(expectedThreadId) {
     const w = this.requireSelected();
     if (expectedThreadId && w.id !== expectedThreadId) throw Error('بسته متعلق به چت دیگری است؛ همان چت را دوباره انتخاب کن یا با /cancel بسته را حذف کن.');
-    if (lastTurn(w.state)?.status === 'inProgress' || w.state.threadRuntimeStatus?.type === 'active') throw Error('Codex در حال کار است؛ برای راهنمایی حین اجرا از /steer متن استفاده کن.');
+    if (isBusy(w)) throw Error('Codex در حال کار است؛ برای راهنمایی حین اجرا از /steer متن استفاده کن.');
     return w;
   }
   readyToSubmit(expectedThreadId) {

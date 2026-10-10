@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 - 2026-10-10
+
+- Recover queues blocked by an empty, unidentified pending turn after a confirmed terminal turn while desktop runtime is idle. Preserve active or ambiguous turns and never mutate the patch mirror.
+- Refresh queued conversations with a new snapshot every 30 seconds when live snapshots stop arriving; force unsubscribe/resubscribe after reconnecting.
+- Expire silent event connections after 35 seconds without data or heartbeat, then reconnect without replaying control requests.
+- Keep FIFO submission identity and completion matching, uncertain-request protection, and the existing Mini App opt-in setting.
+- Add regression tests for the observed DMC state, dropped completion events, unavailable snapshots, silent connections and heartbeats.
+
 ## 0.9.0 - 2026-10-10
 
 - Add an opt-in Telegram Mini App with responsive overview, searchable chats, projects, queue and reported code diffs.

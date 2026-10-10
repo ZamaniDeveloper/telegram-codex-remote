@@ -3,11 +3,11 @@ import { EventEmitter } from 'node:events';
 import { createReadStream } from 'node:fs';
 export class RemoteDesktop extends EventEmitter {
   connected = false; connecting = null; abort = null; closing = false;
-  constructor(url, secret) {
+  constructor(url, secret, { eventTimeoutMs = 35000 } = {}) {
     super(); const parsed = new URL(url);
     if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || parsed.username || parsed.password) throw Error('Connector URL must be an SSH-forwarded localhost HTTP endpoint');
     if (!secret || secret.length < 32) throw Error('Connector secret is missing');
-    this.url = parsed.origin; this.secret = secret;
+    this.url = parsed.origin; this.secret = secret; this.eventTimeoutMs = eventTimeoutMs;
   }
   async rpc(method, args) {
     let response;
@@ -32,15 +32,20 @@ export class RemoteDesktop extends EventEmitter {
       finally { clearTimeout(timer); }
       if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) { abort.abort(); throw Error('Connector authentication or protocol failed'); }
       this.connected = true; this.emit('connected');
-      this.consume(response).catch(() => {}).finally(() => {
+      this.consume(response, abort).catch(() => {}).finally(() => {
         if (this.abort === abort) { this.connected = false; if (!this.closing) this.emit('disconnected'); }
       });
     })().finally(() => { this.connecting = null; });
     return this.connecting;
   }
-  async consume(response) {
+  async consume(response, abort) {
     const decoder = new TextDecoder(); let buffer = '';
+    let silence;
+    const heartbeat = () => { clearTimeout(silence); silence = setTimeout(() => abort.abort(), this.eventTimeoutMs); silence.unref?.(); };
+    heartbeat();
+    try {
     for await (const chunk of response.body) {
+      heartbeat();
       buffer += decoder.decode(chunk, { stream: true });
       if (buffer.length > 40 * 1024 * 1024) throw Error('Event frame too large');
       let boundary;
@@ -53,6 +58,7 @@ export class RemoteDesktop extends EventEmitter {
         else if (event.type === 'disconnected') { this.emit('disconnected'); }
       }
     }
+    } finally { clearTimeout(silence); }
   }
   async owner(id) { await this.connect(); return this.rpc('owner', [id]); }
   follow(...args) { return this.rpc('follow', args).catch(() => { this.emit('disconnected'); }); }
