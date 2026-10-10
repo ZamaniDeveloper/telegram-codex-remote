@@ -8,7 +8,7 @@ export function compactState(state) {
   result.turns = turnsOf(state).map(turn => {
     const value = {};
     for (const key of ['id', 'turnId', 'status', 'error', 'durationMs', 'startedAt', 'completedAt']) if (Object.hasOwn(turn, key)) value[key] = turn[key];
-    value.items = (turn.items || []).filter(item => ['agentMessage', 'userMessage', 'steeringUserMessage'].includes(item.type) || approvalItems.has(item.id));
+    value.items = (turn.items || []).filter(item => ['agentMessage', 'userMessage', 'steeringUserMessage', 'fileChange'].includes(item.type) || approvalItems.has(item.id));
     return value;
   });
   return result;

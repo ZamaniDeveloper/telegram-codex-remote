@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 - 2026-10-10
+
+- Add an opt-in Telegram Mini App with responsive overview, searchable chats, projects, queue and reported code diffs.
+- View loaded conversation messages and live updates, read the latest message without selection, activate a chat, create a project chat, submit text, steer and stop the bound turn.
+- Enforce Telegram initData HMAC verification, owner identity, one-hour freshness, same-origin requests and bounded responses.
+- Persist mutation intent before dispatch, deduplicate completed actions and refuse to replay uncertain actions after restart.
+- Bind the listener to localhost behind HTTPS; the Windows connector remains private behind SSH.
+- Retain fileChange events in compact live state. Only Codex-reported changes in the latest loaded turn are displayed.
+
 ## 0.8.5 - 2026-10-10
 
 - Display waiting message counts for the selected chat and all queues in the Codex status card.

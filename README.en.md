@@ -145,3 +145,7 @@ Send a direct private message with a Telegram effect to let the bot reuse that e
 See the official [User metadata](https://core.telegram.org/bots/api#user), [custom emoji and formatting rules](https://core.telegram.org/bots/api#formatting-options), [inline button icons](https://core.telegram.org/bots/api#inlinekeyboardbutton), [message effects](https://core.telegram.org/bots/api#sendmessage), and [file download limits](https://core.telegram.org/bots/api#getfile).
 
 The Codex status card shows waiting request counts for the selected chat and all queues. The main menu shows the total, and queued-message receipts show both counts. Each group counts as one request; accepted, dispatching and uncertain requests are excluded. Reopen the status or main menu to see current counts.
+
+### Graphical panel inside Telegram
+
+An optional Mini App provides a live dashboard, searchable conversations, projects, queue controls and reported code diffs. Activate a chat, continue it, create a chat in an existing project, or guide/stop its current task. Configure an HTTPS URL and a loopback reverse proxy; see [Mini App setup and security](docs/MINIAPP.en.md). Owner-only Telegram authentication and durable mutation deduplication protect existing desktop sessions.

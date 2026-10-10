@@ -14,6 +14,8 @@ import { dispatchCallback } from './callback-dispatch.mjs';
 import { Outbox } from './outbox.mjs';
 import { DesktopRecovery } from './desktop-recovery.mjs';
 import { Premium } from './premium.mjs';
+import { miniappConfig } from './miniapp-auth.mjs';
+import { createMiniApp } from './miniapp.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -29,8 +31,10 @@ if (process.env.TELEGRAM_OWNER_ID) {
 const releaseLock = acquirePidLock(lockFile, 'Telegram bot');
 function save() { writeFileSync(stateFile + '.tmp', JSON.stringify(settings, null, 2), { mode: 0o600 }); renameSync(stateFile + '.tmp', stateFile); }
 const tg = new Telegram(token); let running = true, bridge = null, inbox = null, ui = null, flushTimer, restoreSelection = null, lastRestore = 0;
+const appConfig = miniappConfig(); let appServer;
 function stop() {
   running = false; clearInterval(flushTimer);
+  appServer?.close();
   void bridge?.desktopRecovery?.stop();
   ui?.accounts.close().catch(() => {});
   try { bridge?.close(); } catch {}
@@ -51,6 +55,7 @@ function attachOwner() {
   restoreSelection = settings.selectedThread || null;
   bridge.onSelected = row => { settings.selectedThread = { id: row.id, title: row.title }; restoreSelection = null; save(); };
   inbox = new Inbox(bridge); ui = new BotUi(bridge, inbox);
+  ui.miniappUrl = appConfig?.url;
   if (!process.env.CONNECTOR_URL && process.platform === 'win32' && process.env.CONNECTOR_AUTO_START_CODEX !== '0') {
     bridge.desktopRecovery = new DesktopRecovery(bridge.ipc, { blocked: () => bridge.accountSwitching || ui.accounts.local?.busy, report: status => console.log('Codex desktop recovery:', status) });
     bridge.desktopRecovery.start();
@@ -65,7 +70,7 @@ async function setupUi() {
   commands.push({ command: 'accounts', description: 'حساب‌های Codex و تعویض حساب' });
   commands.push({ command: 'premium', description: 'تلگرام پرمیوم و ظاهر ویژه' });
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
-  await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
+  await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: appConfig ? { type: 'web_app', text: 'TeleCodex', web_app: { url: appConfig.url } } : { type: 'commands' } });
   if (settings.uiRevision !== UI_REVISION || settings.uiEdition !== UI_EDITION) {
     await ui.home(true); settings.uiRevision = UI_REVISION; settings.uiEdition = UI_EDITION; save(); console.log('Telegram UI revision installed:', UI_REVISION, UI_EDITION);
     try { const panel = await ui.quota.show(); console.log('Quota screen delivered:', Boolean(panel?.message_id)); }
@@ -73,6 +78,11 @@ async function setupUi() {
   }
 }
 try {
+  if (appConfig) {
+    appServer = createMiniApp({ config: appConfig, token, getBridge: () => bridge, getUi: () => ui, root, journal: path.join(dataDir, 'miniapp-actions') });
+    await new Promise((resolve,reject) => { appServer.once('error',reject); appServer.listen(appConfig.port,'127.0.0.1',resolve); });
+    console.log('Mini App loopback listener ready');
+  }
   const bot = await tg.call('getMe');
   const webhook = await tg.call('getWebhookInfo');
   if (webhook.url) throw Error('این ربات webhook فعال دارد؛ از BotFather یک ربات جدید برای این اتصال بساز.');

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let files = 0;
-for (const directory of ['src', 'test', 'deploy', 'scripts']) {
+for (const directory of ['src', 'test', 'deploy', 'scripts', 'web']) {
   for (const entry of await readdir(path.join(root, directory))) {
     if (!/\.(mjs|cjs)$/.test(entry)) continue;
     const result = spawnSync(process.execPath, ['--check', path.join(root, directory, entry)], { encoding: 'utf8' });

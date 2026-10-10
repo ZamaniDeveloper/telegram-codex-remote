@@ -9,7 +9,7 @@ import { text as T } from './feature-text.mjs';
 import { AccountUi } from './account-ui.mjs';
 import { PremiumUi } from './premium-ui.mjs';
 
-export const UI_REVISION = 10;
+export const UI_REVISION = 11;
 export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
@@ -23,8 +23,9 @@ export function mainKeyboard() {
   return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.accounts], [LABELS.queue, LABELS.help], [LABELS.premium, LABELS.home]].map(row => row.map(text => ({ text }))),
     resize_keyboard: true, is_persistent: true, input_field_placeholder: 'پیام بنویس یا از دکمه‌ها استفاده کن' };
 }
-export function mainInlineKeyboard() {
+export function mainInlineKeyboard(miniappUrl) {
   return { inline_keyboard: [
+    ...(miniappUrl ? [[{ text: '📱 پنل گرافیکی', web_app: { url: miniappUrl }, style: 'primary' }]] : []),
     [button(LABELS.chats, 'u:chats', 'primary'), button(LABELS.search, 'u:search')],
     ...featureMenuRows(),
     [button(LABELS.status, 'u:status'), button(LABELS.history, 'u:history')],
@@ -58,7 +59,7 @@ export class BotUi {
       styled('📦 ارسال‌گروهی‌پیام‌ها: '), this.inbox.current ? `${this.inbox.current.items.length} پیام آماده` : 'بسته‌ای باز نیست',
       '\n⏳ پیام‌های منتظر در کل صف: ', String(this.bridge.outbox?.count() || 0),
       '\n\nپیام‌ها و پیوست‌ها را بفرست؛ پاسخ‌ها و سؤال‌های Codex همین‌جا نمایش داده می‌شوند.');
-    return this.tg.send(this.chatId, card('🤖 منوی اصلی TeleCodex', body, 'گزینهٔ موردنظر را از دکمه‌های زیر همین پیام انتخاب کن.'), mainInlineKeyboard());
+    return this.tg.send(this.chatId, card('🤖 منوی اصلی TeleCodex', body, 'گزینهٔ موردنظر را از دکمه‌های زیر همین پیام انتخاب کن.'), mainInlineKeyboard(this.miniappUrl));
   }
   async help() {
     return this.tg.send(this.chatId, card('✨ راهنمای ربات', concatRich(
