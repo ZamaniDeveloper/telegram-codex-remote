@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3 - 2026-10-10
+
+- Automatically pin each live progress card silently and keep its message identity through edits and completion.
+- Retain completed live cards in the pinned list; leave unrelated pins and history responses unchanged.
+- Retry transient pin failures with bounded frequency and honor Telegram rate limits without interrupting live delivery.
+- Cover exact chat/message targeting, repeated updates, completion and failed-pin recovery.
+
 ## 0.8.2 - 2026-10-10
 
 - Continuously reopen a closed Windows Codex app and reconnect to its IPC, in connector and local bot modes.

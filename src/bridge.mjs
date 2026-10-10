@@ -257,8 +257,19 @@ export class Bridge {
   }
   askQuestion(...args) { return this.questions.ask(...args); }
   answer(text) { return this.questions.answer(text); }
+  async pinLive(record) {
+    if (!record.pinWanted || record.pinned || !this.tg.pin || Date.now() < (record.nextPinAt || 0)) return;
+    // A pin failure must never interrupt delivery, completion or question handling.
+    record.nextPinAt = Date.now() + 30000;
+    try { await this.tg.pin(this.chatId, record.id); record.pinned = true; }
+    catch (error) {
+      record.nextPinAt = Date.now() + Math.max(30000, (Number(error?.retryAfter) || 0) * 1000);
+      console.warn('Live message pin unavailable; retrying later.');
+    }
+  }
   async flush() {
     for (const w of this.watched.values()) {
+      for (const record of w.messages.values()) await this.pinLive(record);
       if (!w.synced) continue;
       await this.questions.sync(w);
       for (const req of pendingRequests(w.state)) {
@@ -286,6 +297,8 @@ export class Bridge {
       if (previous) await this.tg.edit(this.chatId, previous.id, preview, markup);
       else { const sent = await this.tg.send(this.chatId, preview, markup); w.messages.set(id, { id: sent.message_id }); }
       const record = w.messages.get(id); record.signature = signature; record.markup = markup;
+      if (!final) record.pinWanted = true;
+      await this.pinLive(record);
       if (final) {
         for (let i = record.finalIndex || 1; i < parts.length; i++) {
           await this.tg.send(this.chatId, parts[i], i === parts.length - 1 ? markup : undefined); record.finalIndex = i + 1;

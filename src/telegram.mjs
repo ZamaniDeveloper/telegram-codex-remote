@@ -36,6 +36,9 @@ export class Telegram {
     return this.call('editMessageText', { chat_id: chatId, message_id: messageId, text, entities,
       link_preview_options: { is_disabled: true }, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
   }
+  pin(chatId, messageId) {
+    return this.call('pinChatMessage', { chat_id: chatId, message_id: messageId, disable_notification: true });
+  }
   async downloadFile(fileId, destination) {
     const meta = await this.call('getFile', { file_id: fileId });
     if (meta.file_size > MAX_FILE_BYTES) throw Error('حداکثر اندازهٔ هر فایل ۲۰ مگابایت است.');

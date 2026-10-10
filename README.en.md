@@ -133,3 +133,5 @@ The main menu (`/menu`, Home and back buttons) attaches all navigation buttons d
 Use Accounts or `/accounts` to add a ChatGPT login on your phone and manually switch the Windows account while retaining local projects. Update both components. See [account setup and recovery](docs/ACCOUNTS.en.md).
 
 Closed Codex is reopened automatically while the Windows connector is running. Windows must remain awake, online and logged in. See [automatic desktop recovery](docs/INSTALL.en.md#automatic-desktop-recovery-082) for controls and SSH keepalives.
+
+Live progress cards are automatically pinned silently. Updates and the final response edit the same message, so the result remains pinned after completion. Existing unrelated pins are retained. Pin failures do not stop response delivery and are retried with rate-limit-aware delays. History and final-only responses are not auto-pinned.
