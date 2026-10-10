@@ -56,6 +56,7 @@ export class BotUi {
       styled('💬 چت فعال: '), w?.title || 'هنوز انتخاب نشده', '\n',
       styled('🔗 اتصال: '), w?.synced ? 'متصل به Codex' : 'چت را از دکمهٔ «چت‌ها» انتخاب کن', '\n',
       styled('📦 ارسال‌گروهی‌پیام‌ها: '), this.inbox.current ? `${this.inbox.current.items.length} پیام آماده` : 'بسته‌ای باز نیست',
+      '\n⏳ پیام‌های منتظر در کل صف: ', String(this.bridge.outbox?.count() || 0),
       '\n\nپیام‌ها و پیوست‌ها را بفرست؛ پاسخ‌ها و سؤال‌های Codex همین‌جا نمایش داده می‌شوند.');
     return this.tg.send(this.chatId, card('🤖 منوی اصلی TeleCodex', body, 'گزینهٔ موردنظر را از دکمه‌های زیر همین پیام انتخاب کن.'), mainInlineKeyboard());
   }

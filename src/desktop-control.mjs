@@ -50,7 +50,7 @@ export async function withControlRpc(operation) {
   const rpc = new ControlRpc(spawn(await codexExecutable(), ['app-server', '--stdio'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }));
   const deadline = setTimeout(() => rpc.close(), 120000);
   try {
-    await rpc.request('initialize', { clientInfo: { name: 'telecodex_control', version: '0.8.4' }, capabilities: { experimentalApi: true } });
+    await rpc.request('initialize', { clientInfo: { name: 'telecodex_control', version: '0.8.5' }, capabilities: { experimentalApi: true } });
     rpc.child.stdin.write('{"method":"initialized"}\n'); return await operation(rpc);
   } finally { clearTimeout(deadline); rpc.close(); }
 }

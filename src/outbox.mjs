@@ -22,6 +22,8 @@ export class Outbox {
   }
   save() { writeFileSync(this.file + '.tmp', JSON.stringify({ version: 1, entries: this.entries }), { mode: 0o600 }); renameSync(this.file + '.tmp', this.file); }
   has(id) { return this.entries.some(e => e.threadId === id); }
+  count(threadId) { return this.entries.filter(e => e.status === 'queued' && (!threadId || e.threadId === threadId)).length; }
+  countsText(threadId) { return `${T.chatCount}: ${this.count(threadId)}\n${T.totalCount}: ${this.count()}`; }
   enqueue(w, input, clientId) {
     const existing = this.entries.find(e => e.clientId === clientId);
     if (existing) { if (existing.threadId !== w.id) throw Error('Outbox message belongs to another conversation'); return existing; }
@@ -77,7 +79,7 @@ export class Outbox {
     } finally { this.flushing = false; }
   }
   markup(entry) { return { inline_keyboard: [[{ text: entry.status === 'uncertain' ? T.removeUncertain : T.cancel, callback_data: `o:${entry.id}:cancel` }], [{ text: T.title, callback_data: 'u:queue' }]] }; }
-  async notice(bridge, entry) { return bridge.tg.send(bridge.chatId, card(T.queued, `${entry.title || entry.threadId}\n\n${T.waiting}`), this.markup(entry)); }
+  async notice(bridge, entry) { return bridge.tg.send(bridge.chatId, card(T.queued, `${entry.title || entry.threadId}\n\n${this.countsText(entry.threadId)}\n\n${T.waiting}`), this.markup(entry)); }
   async show(bridge, offset = 0) {
     if (!this.entries.length) return bridge.tg.send(bridge.chatId, card(T.title, T.empty));
     offset = Math.max(0, Math.min(offset, Math.floor((this.entries.length - 1) / 5) * 5));

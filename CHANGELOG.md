@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.5 - 2026-10-10
+
+- Display waiting message counts for the selected chat and all queues in the Codex status card.
+- Show the total waiting count in the main menu and both counts in queued-message receipts.
+- Count each grouped submission once; exclude accepted, dispatching and uncertain requests. Counts reflect the durable queue at the time the card is opened.
+
 ## 0.8.4 - 2026-10-10
 
 - Detect Premium status only from the paired Telegram owner, with automatic updates and a Premium settings screen.

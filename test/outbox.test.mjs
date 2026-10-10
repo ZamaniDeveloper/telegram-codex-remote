@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { Outbox } from '../src/outbox.mjs';
+import { text as QueueText } from '../src/outbox-text.mjs';
 import { Bridge } from '../src/bridge.mjs';
 import { Inbox } from '../src/inbox.mjs';
 import { BotUi, LABELS } from '../src/ui.mjs';
@@ -134,4 +135,23 @@ test('capacity and size limits reject before dispatch, and an unrelated idle wat
   f.bridge.outbox.enqueue(f.w, [{ type: 'text', text: 'Retained' }], randomUUID()); f.bridge.watched.delete(f.w.id); f.bridge.selected = null;
   for (let i = 0; i < 8; i++) { const id = randomUUID(); f.bridge.watched.set(id, { id, owner: 'desktop', state: { turns: [] } }); }
   await f.bridge.outbox.follow(f.bridge); assert.ok(f.bridge.watched.has(f.w.id)); assert.equal(f.bridge.watched.size, 8);
+});
+
+test('status and queue receipts count only waiting requests, scoped to the original chat and the whole queue', async t => {
+  const f = await fixture(t), other = {...f.w,id:randomUUID(),title:'Other chat'};
+  const bundle = f.bridge.outbox.enqueue(f.w,[{type:'text',text:'One'},{type:'text',text:'Two'},{type:'image',url:'fixture'}],randomUUID());
+  const queued = f.bridge.outbox.enqueue(f.w,[{type:'text',text:'Next'}],randomUUID());
+  f.bridge.outbox.enqueue(other,[{type:'text',text:'Elsewhere'}],randomUUID());
+  for(const status of ['awaiting','dispatching','uncertain']) {
+    const entry = f.bridge.outbox.enqueue(f.w,[{type:'text',text:status}],randomUUID());entry.status=status;
+  }
+  f.bridge.outbox.save();
+  assert.equal(f.bridge.outbox.count(f.w.id),2);assert.equal(f.bridge.outbox.count(),3);
+  await f.ui.callback('u:status');assert.ok(f.sent.at(-1).text.includes(QueueText.chatCount+': 2'));assert.ok(f.sent.at(-1).text.includes(QueueText.totalCount+': 3'));
+  await f.bridge.outbox.notice(f.bridge,bundle);assert.ok(f.sent.at(-1).text.includes(QueueText.chatCount+': 2'));
+  await f.ui.home();assert.match(f.sent.at(-1).text,/⏳[^\n]*: 3/);
+  f.bridge.selected=other;await f.ui.callback('u:status');assert.ok(f.sent.at(-1).text.includes(QueueText.chatCount+': 1'));assert.ok(f.sent.at(-1).text.includes(QueueText.totalCount+': 3'));
+  await f.bridge.outbox.callback(`o:${queued.id}:cancel`,f.bridge);assert.equal(f.bridge.outbox.count(f.w.id),1);assert.equal(f.bridge.outbox.count(),2);
+  bundle.status='awaiting';f.bridge.outbox.save();assert.equal(f.bridge.outbox.count(f.w.id),0);
+  const restored = new Outbox(f.file);assert.equal(restored.count(),1);assert.equal(restored.count(f.w.id),0);assert.equal(f.calls.length,0);
 });

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Mohsen Zamani / ZamaniDeveloper. See LICENSE.
 export const text = {
+  chatCount: '⏳ پیام‌های منتظر این چت', totalCount: '📬 پیام‌های منتظر در کل صف',
   title: '⏳ صف ارسال', queued: '⏳ پیام در صف قرار گرفت', waiting: 'پس از پایان کار فعلی، به‌ترتیب به همین گفتگو ارسال می‌شود.',
   sent: '📨 پیام از صف ارسال شد', empty: 'صف ارسال خالی است.', cancel: '🗑 حذف از صف', cancelled: 'پیام از صف حذف شد.',
   uncertain: '⚠️ نتیجهٔ ارسال این پیام نامشخص است. صف این گفتگو متوقف شد؛ ابتدا Codex را بررسی کن. ارسال خودکار تکرار نمی‌شود.',

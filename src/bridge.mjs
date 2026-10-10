@@ -169,7 +169,8 @@ export class Bridge {
       const w = this.requireSelected(); const turn = lastTurn(w.state);
       if (command === 'status') return this.tg.send(this.chatId, card('📊 وضعیت Codex', concatRich(styled(w.title || 'چت'), '\n\n',
         '⚡ وضعیت: ', turn?.status === 'inProgress' ? 'در حال کار' : 'آماده', '\n🧠 مدل: ', w.state.latestModel || 'پیش‌فرض', '\n📁 پروژه: ', w.state.cwd || 'بدون پروژه',
-        '\n❓ سؤال‌های باز: ', String(this.questions.eligible().filter(s => s.threadId === w.id).length), '\n🔐 درخواست‌های تأیید: ', String(pendingRequests(w.state).filter(r => r.method.endsWith('requestApproval')).length))), chatKeyboard(w.id));
+        '\n❓ سؤال‌های باز: ', String(this.questions.eligible().filter(s => s.threadId === w.id).length), '\n🔐 درخواست‌های تأیید: ', String(pendingRequests(w.state).filter(r => r.method.endsWith('requestApproval')).length),
+        '\n⏳ پیام‌های منتظر این چت: ', String(this.outbox?.count(w.id) || 0), '\n📬 پیام‌های منتظر در کل صف: ', String(this.outbox?.count() || 0))), chatKeyboard(w.id));
       if (command === 'history') {
         const turns = turnsOf(w.state).slice(-3).filter(t => assistantText(t));
         if (!turns.length) return this.tg.send(this.chatId, card('🗂 پاسخ‌های اخیر', 'پاسخی در بخش بارگذاری‌شدهٔ تاریخچه نیست.'), navKeyboard());
