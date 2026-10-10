@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.2 - 2026-10-10
+
+- Continuously reopen a closed Windows Codex app and reconnect to its IPC, in connector and local bot modes.
+- Restore observation of the selected existing chat after desktop disconnection, with throttled URI opening and no model request replay.
+- Serialize recovery against account activation; reuse running Codex and preserve credentials, projects, chats and durable queues.
+- Back off failed SSH reconnections, bound network connection time and log safe failure categories.
+- Document server SSH keepalives to release stale reverse tunnels after network changes.
+- Cover reopening, single-flight startup, shutdown, account-switch races and selected-chat recovery with isolated tests.
+
 ## 0.8.1 - 2026-10-09
 
 - Wait up to a minute for desktop IPC readiness after switching, including immediate named-pipe failures during slow startup.

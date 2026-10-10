@@ -32,11 +32,29 @@ export class Bridge {
     ipc.on('disconnected', () => { for (const w of this.watched.values()) { w.owner = null; w.synced = false; } });
   }
   async reconnect() {
+    if (this.accountSwitching) return;
     await this.ipc.connect();
     for (const w of this.watched.values()) if (!w.owner) {
-      try { w.owner = await this.ipc.owner(w.id); this.ipc.follow(w.id, w.owner); }
-      catch { /* Only the desktop can own the thread. Never resume on a second server. */ }
+      try { w.owner = await this.ipc.owner(w.id); await this.ipc.follow(w.id, w.owner); }
+      catch {
+        w.owner = null;
+        // Reopen only the selected existing chat, with bounded URI attempts.
+        // This restores observation, never starts or repeats a model turn.
+        if (w.id === this.selected?.id && Date.now() - (w.lastOpenAttempt || 0) >= 30000) {
+          w.lastOpenAttempt = Date.now();
+          await this.openExisting(w.id).catch(() => {});
+        }
+      }
     }
+  }
+  async openExisting(id) {
+    if (!/^[\da-f-]{36}$/i.test(id)) throw Error('Invalid thread ID');
+    if (this.ipc.openThread) return this.ipc.openThread(id);
+    if (process.platform !== 'win32') throw Error('Windows desktop required');
+    await new Promise((resolve, reject) => {
+      const child = spawn('explorer.exe', [`codex://threads/${id}`], { windowsHide: true, stdio: 'ignore' });
+      child.once('error', reject); child.once('spawn', resolve);
+    });
   }
   action(value) {
     const id = randomBytes(12).toString('hex');
@@ -59,15 +77,7 @@ export class Bridge {
     try { owner = await this.ipc.owner(row.id); }
     catch {
       if (!/^[\da-f-]{36}$/i.test(row.id)) throw Error('این چت را ابتدا در Codex دسکتاپ باز کن.');
-      if (this.ipc.openThread) await this.ipc.openThread(row.id);
-      else {
-      if (process.platform !== 'win32') throw Error('این چت را ابتدا در Codex دسکتاپ باز کن.');
-      // Open an existing chat via the app's registered URI; no restart or file edit.
-      await new Promise((resolve, reject) => {
-        const child = spawn('explorer.exe', [`codex://threads/${row.id}`], { windowsHide: true, stdio: 'ignore' });
-        child.once('error', reject); child.once('spawn', resolve);
-      });
-      }
+      await this.openExisting(row.id);
       for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise(r => setTimeout(r, 700));
         try { owner = await this.ipc.owner(row.id); break; } catch {}

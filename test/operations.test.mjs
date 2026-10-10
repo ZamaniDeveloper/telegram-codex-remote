@@ -12,7 +12,7 @@ import { port, tunnelOptions } from '../src/config.mjs';
 import { acquirePidLock } from '../src/pid-lock.mjs';
 import { startConnector } from '../src/connector-supervisor.mjs';
 
-const environment = { CONNECTOR_SECRET: 'fixture-'.repeat(8), CONNECTOR_SSH_HOST: 'server.example.com', CONNECTOR_SSH_USER: 'codexbridge' };
+const environment = { CONNECTOR_SECRET: 'fixture-'.repeat(8), CONNECTOR_SSH_HOST: 'server.example.com', CONNECTOR_SSH_USER: 'codexbridge', CONNECTOR_AUTO_START_CODEX: '0' };
 async function temporary(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'codex-ops-'));
   t.after(() => rm(root, { recursive: true, force: true })); return path.join(root, 'project with spaces');

@@ -7,28 +7,42 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-export function startConnector({ root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), env = process.env, spawnSsh = spawn, retryMs = 5000 } = {}) {
+export function startConnector({ root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), env = process.env, spawnSsh = spawn, retryMs = 5000, desktopRecovery = process.platform === 'win32' && env.CONNECTOR_AUTO_START_CODEX !== '0' } = {}) {
   const options = tunnelOptions(env, root);
   const cleanup = acquirePidLock(path.join(root, 'data', 'connector.pid'), 'Windows connector');
   let server;
-  try { server = createConnector({ secret: options.secret, attachments: new AttachmentStore(path.join(root, 'data', 'attachments')) }); }
+  try { server = createConnector({ secret: options.secret, attachments: new AttachmentStore(path.join(root, 'data', 'attachments')), desktopRecovery }); }
   catch (e) { cleanup(); throw e; }
-  let stopped = false, ssh = null, timer = null;
+  let stopped = false, ssh = null, timer = null, failures = 0;
   function tunnel() {
     if (stopped) return;
-    let settled = false;
+    let settled = false, reported = false;
+    const startedAt = Date.now();
     const schedule = () => {
       if (settled) return; settled = true;
-      if (!stopped) { console.log('SSH reconnect scheduled'); timer = setTimeout(tunnel, retryMs); }
+      if (Date.now() - startedAt >= 30000) failures = 0;
+      if (!stopped) {
+        const delay = Math.min(60000, retryMs * 2 ** Math.min(failures++, 5));
+        console.log('SSH reconnect scheduled in', delay, 'ms'); timer = setTimeout(tunnel, delay);
+      }
     };
     try {
       ssh = spawnSsh(options.sshBin, ['-N', '-T', '-p', String(options.sshPort), '-i', options.keyFile,
         '-o', `UserKnownHostsFile="${options.knownHostsFile.replaceAll('\\', '/').replaceAll('"', '\\"')}"`,
         '-o', 'StrictHostKeyChecking=yes', '-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes',
+        '-o', 'ConnectTimeout=10', '-o', 'TCPKeepAlive=yes',
         '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
         '-R', `127.0.0.1:${options.remotePort}:127.0.0.1:${options.localPort}`, `${options.user}@${options.host}`],
       { cwd: root, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
-      ssh.stderr?.on('data', () => console.error('SSH tunnel unavailable; check pinned host key, key permissions and SSH access.'));
+      ssh.stderr?.on('data', chunk => {
+        if (reported) return; reported = true;
+        const text = String(chunk);
+        const reason = /remote port forwarding failed/i.test(text) ? 'remote port already occupied or forwarding denied'
+          : /Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(text) ? 'pinned host key verification failed'
+          : /Permission denied/i.test(text) ? 'SSH key authentication denied'
+          : 'network or SSH access unavailable';
+        console.error('SSH tunnel unavailable:', reason);
+      });
       ssh.once('error', () => { console.error('SSH tunnel process unavailable'); schedule(); });
       ssh.once('exit', schedule); ssh.once('close', schedule);
     } catch { console.error('SSH tunnel process unavailable'); schedule(); }

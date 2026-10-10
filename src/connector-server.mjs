@@ -10,11 +10,13 @@ import { DesktopControl } from './desktop-control.mjs';
 import { Transcriber } from './transcription.mjs';
 import { LiveStream } from './live-stream.mjs';
 import { Accounts } from './accounts.mjs';
+import { DesktopRecovery } from './desktop-recovery.mjs';
 
-export function createConnector({ secret, ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient(), control = new DesktopControl(), transcriber = new Transcriber(), accounts = new Accounts({ ipc }) } = {}) {
+export function createConnector({ secret, ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient(), control = new DesktopControl(), transcriber = new Transcriber(), accounts = new Accounts({ ipc }), desktopRecovery = process.platform === 'win32' && ipc instanceof DesktopIpc && ipc.pipe === '\\\\.\\pipe\\codex-ipc' && process.env.CONNECTOR_AUTO_START_CODEX !== '0', recoveryRuntime } = {}) {
   if (!secret || secret.length < 32) throw Error('Connector secret must be at least 32 characters');
   const clients = new Set(), stream = new LiveStream();
   let activeRpc = 0, accountChanging = false;
+  const recovery = desktopRecovery ? new DesktopRecovery(ipc, { ...(recoveryRuntime ? { runtime: recoveryRuntime } : {}), blocked: () => accountChanging || accounts.busy, report: status => console.log('Codex desktop recovery:', status) }) : null;
   const authorized = header => {
     const a = Buffer.from(header || ''); const b = Buffer.from(`Bearer ${secret}`);
     return a.length === b.length && timingSafeEqual(a, b);
@@ -55,7 +57,7 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
       else if (method === 'accountsRead' && args.length === 0) result = await accounts.read();
       else if (method === 'accountLoginStart' && args.length === 1) result = await accounts.start(args[0]);
       else if (method === 'accountLoginCancel' && args.length === 1) result = await accounts.cancel(args[0]);
-      else if (method === 'accountActivate' && args.length === 1) result = await accounts.activate(args[0]);
+      else if (method === 'accountActivate' && args.length === 1) { await recovery?.drain(); result = await accounts.activate(args[0]); }
       else if (method === 'quotaRead' && args.length === 0) result = await quota.read();
       else if (method === 'quotaReset' && args.length === 1) result = await quota.consume(validateReset(args[0]));
       else if (method === 'models' && args.length === 0) result = await control.models();
@@ -93,7 +95,8 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
   };
   const disconnected = () => { stream.clear(); for (const client of clients) client.write('data: {"type":"disconnected"}\n\n'); };
   ipc.on('broadcast', broadcast); ipc.on('disconnected', disconnected);
-  server.on('close', () => { ipc.off('broadcast', broadcast); ipc.off('disconnected', disconnected); });
-  server.shutdown = async () => { await accounts.close(); for (const c of clients) c.end(); ipc.close(); await new Promise(r => server.close(r)); };
+  server.once('listening', () => recovery?.start());
+  server.on('close', () => { void recovery?.stop(); ipc.off('broadcast', broadcast); ipc.off('disconnected', disconnected); });
+  server.shutdown = async () => { await recovery?.stop(); await accounts.close(); for (const c of clients) c.end(); ipc.close(); await new Promise(r => server.close(r)); };
   return server;
 }

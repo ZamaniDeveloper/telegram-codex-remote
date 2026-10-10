@@ -63,6 +63,7 @@ export class AccountUi {
       this.actions.delete(token); this.bridge.accountSwitching = true;
       try {
         await this.tg.send(this.chatId, T.working);
+        await this.bridge.desktopRecovery?.drain();
         const result = await this.api('accountActivate', { key: action.account.key, expectedCurrentKey: action.expectedCurrentKey, requestId: action.requestId });
         await this.tg.send(this.chatId, card(result.outcome === 'unchanged' ? T.unchanged : T.switched, concatRich(styled(result.account.email), '\n\n', T.retained)), { inline_keyboard: [[button(T.usage, 'u:usage'), button(T.home, 'u:home')]] });
         if (result.outcome === 'switched') {

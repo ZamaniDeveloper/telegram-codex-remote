@@ -93,3 +93,7 @@ Home responses carry the complete inline menu, independent of reply-keyboard vis
 ## Accounts (0.8.0)
 
 An isolated authentication worker performs device-code login. Profiles remain in a Windows DPAPI vault. Activation is bound to an expected current profile and request UUID, pauses queue delivery, checks local activity, restarts the installed desktop and verifies retained local identities. No auth worker resumes an existing chat. See [account storage and recovery](ACCOUNTS.en.md).
+
+## Desktop recovery (0.8.2)
+
+A single-flight Windows watchdog checks the real desktop IPC connection every five seconds and launches only an absent installed desktop. The connector waits for an in-flight recovery before account activation and blocks watchdog attempts during activation. Recovery restores observation of the selected existing chat through a throttled registered URI, without issuing model turns. SSH transport remains authenticated and loopback-only; retries use bounded backoff and server ClientAlive keepalives prevent dead sessions from retaining the forwarded port.

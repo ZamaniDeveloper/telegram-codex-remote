@@ -12,6 +12,7 @@ import { BotUi, UI_REVISION, UI_EDITION } from './ui.mjs';
 import { acquirePidLock } from './pid-lock.mjs';
 import { dispatchCallback } from './callback-dispatch.mjs';
 import { Outbox } from './outbox.mjs';
+import { DesktopRecovery } from './desktop-recovery.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -29,6 +30,7 @@ function save() { writeFileSync(stateFile + '.tmp', JSON.stringify(settings, nul
 const tg = new Telegram(token); let running = true, bridge = null, inbox = null, ui = null, flushTimer, restoreSelection = null, lastRestore = 0;
 function stop() {
   running = false; clearInterval(flushTimer);
+  void bridge?.desktopRecovery?.stop();
   ui?.accounts.close().catch(() => {});
   try { bridge?.close(); } catch {}
   releaseLock();
@@ -46,6 +48,10 @@ function attachOwner() {
   restoreSelection = settings.selectedThread || null;
   bridge.onSelected = row => { settings.selectedThread = { id: row.id, title: row.title }; restoreSelection = null; save(); };
   inbox = new Inbox(bridge); ui = new BotUi(bridge, inbox);
+  if (!process.env.CONNECTOR_URL && process.platform === 'win32' && process.env.CONNECTOR_AUTO_START_CODEX !== '0') {
+    bridge.desktopRecovery = new DesktopRecovery(bridge.ipc, { blocked: () => bridge.accountSwitching || ui.accounts.local?.busy, report: status => console.log('Codex desktop recovery:', status) });
+    bridge.desktopRecovery.start();
+  }
   bridge.onSteerPrompt = context => ui.prompt('steer', context);
   inbox.onInstruction = batchId => ui.prompt('instruction', { batchId });
 }

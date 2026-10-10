@@ -43,7 +43,7 @@ export class LoginRpc extends EventEmitter {
     });
   }
   async initialize() {
-    await this.request('initialize', { clientInfo: { name: 'telecodex_accounts', version: '0.8.1' }, capabilities: { experimentalApi: true } });
+    await this.request('initialize', { clientInfo: { name: 'telecodex_accounts', version: '0.8.2' }, capabilities: { experimentalApi: true } });
     this.child.stdin.write('{"method":"initialized"}\n');
   }
   close() {

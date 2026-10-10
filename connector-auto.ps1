@@ -4,11 +4,7 @@ Set-Location -LiteralPath $PSScriptRoot
 $connectorNodePath = (Get-Command node.exe).Source
 $connectorPidFile = Join-Path $PSScriptRoot 'data\connector.pid'
 New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot 'data') -Force | Out-Null
-# The desktop must run in this user's interactive session to own existing chats.
-$codexProcess = Get-Process ChatGPT -ErrorAction SilentlyContinue | Where-Object { $_.Path -match '\\OpenAI\.Codex_[^\\]+\\app\\ChatGPT\.exe$' }
-if (-not $codexProcess) {
-    Start-Process -FilePath explorer.exe -ArgumentList 'shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App' -WindowStyle Hidden
-}
+# The connector continuously reopens an absent desktop in this interactive session.
 while ($true) {
     $connectorActive = $false
     try {

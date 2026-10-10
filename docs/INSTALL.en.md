@@ -93,6 +93,8 @@ Match User codexbridge
     X11Forwarding no
     PermitTTY no
     ForceCommand /bin/false
+    ClientAliveInterval 15
+    ClientAliveCountMax 3
 Match all
 ```
 
@@ -192,3 +194,27 @@ See [the 0.7 feature and installation guide](FEATURES-0.7.en.md). Install Whispe
 ## Accounts from Telegram (0.8.0)
 
 Use Accounts or `/accounts` to add a ChatGPT login on your phone and manually switch the Windows account while retaining local projects. Update both components. See [account setup and recovery](ACCOUNTS.en.md).
+
+## Automatic desktop recovery (0.8.2)
+
+The Windows connector checks its Codex connection every five seconds. If the
+desktop is absent, it launches the installed app in the signed-in Windows user's
+session and waits up to 60 seconds for IPC readiness. A running desktop is reused.
+After reconnection, the selected existing chat is reopened through its registered
+URI if needed, at most once every 30 seconds. Recovery does not replay user turns,
+change credentials or restart a running app. It pauses during account activation.
+Local Windows bot mode uses the same recovery.
+
+Windows must remain awake, online and logged in. Install logon startup with
+`install-windows.ps1`; closing Codex alone no longer requires a manual restart.
+Recovery cannot bypass a Codex sign-in prompt, wake a powered-off PC, or work
+after Windows logout. To keep Codex intentionally closed, set
+`CONNECTOR_AUTO_START_CODEX=0` in `.connector.env` (or `.env` for local mode)
+and restart the connector/bot.
+
+The SSH keepalives in step 4 release disconnected reverse tunnels after network
+changes. Validate with `sshd -t` before reloading SSH. If the remote port is still
+occupied, inspect its listener and connection before ending only the stale tunnel
+session. Never kill unrelated SSH sessions or disable host-key verification.
+The connector retries failed SSH connections with backoff from 5 to 60 seconds
+and writes safe failure categories to `data/connector-error.log`.

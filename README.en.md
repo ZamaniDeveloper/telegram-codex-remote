@@ -32,6 +32,7 @@ are excluded.
 - Current-account quota windows, Tehran reset times and earned reset credits.
 - Confirmed credit consumption and a durable request ID for uncertain resets.
 - Windows logon startup, supervised reconnection and a pinned reverse SSH tunnel.
+- Automatic reopening of closed Codex and restoration of the selected chat, without replaying uncertain requests.
 - Local or Linux-server deployment; one paired owner and confined RPC.
 
 The bot delegates work to the existing desktop thread owner. It does not start
@@ -130,3 +131,5 @@ The main menu (`/menu`, Home and back buttons) attaches all navigation buttons d
 ## Accounts from Telegram (0.8.1)
 
 Use Accounts or `/accounts` to add a ChatGPT login on your phone and manually switch the Windows account while retaining local projects. Update both components. See [account setup and recovery](docs/ACCOUNTS.en.md).
+
+Closed Codex is reopened automatically while the Windows connector is running. Windows must remain awake, online and logged in. See [automatic desktop recovery](docs/INSTALL.en.md#automatic-desktop-recovery-082) for controls and SSH keepalives.
