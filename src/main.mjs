@@ -13,6 +13,7 @@ import { acquirePidLock } from './pid-lock.mjs';
 import { dispatchCallback } from './callback-dispatch.mjs';
 import { Outbox } from './outbox.mjs';
 import { DesktopRecovery } from './desktop-recovery.mjs';
+import { Premium } from './premium.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -44,6 +45,8 @@ function attachOwner() {
     const remote = new RemoteDesktop(process.env.CONNECTOR_URL, process.env.CONNECTOR_SECRET);
     bridge = new Bridge(tg, settings.ownerId, remote, (...args) => remote.listThreads(...args));
   } else bridge = new Bridge(tg, settings.ownerId);
+  bridge.premium = new Premium(tg, settings.ownerId, { state: settings.telegramPremium, save: state => { settings.telegramPremium = state; save(); } });
+  tg.premium = bridge.premium;
   bridge.outbox = new Outbox(path.join(dataDir, 'outbox.json'));
   restoreSelection = settings.selectedThread || null;
   bridge.onSelected = row => { settings.selectedThread = { id: row.id, title: row.title }; restoreSelection = null; save(); };
@@ -56,9 +59,11 @@ function attachOwner() {
   inbox.onInstruction = batchId => ui.prompt('instruction', { batchId });
 }
 async function setupUi() {
+  await bridge.premium.refresh();
   const commands = [ ['menu', 'منوی اصلی'], ['chats', 'انتخاب چت'], ['usage', 'سهمیه و اعتبار ریست'], ['status', 'وضعیت Codex'], ['history', 'پاسخ‌های اخیر'], ['batch', 'بسته جدید'], ['pending', 'ارسال‌گروهی‌پیام‌ها'], ['queue', 'صف ارسال'], ['send', 'ارسال بسته'], ['answer', 'پاسخ به سؤال'], ['stop', 'توقف کار'], ['help', 'راهنما'] ].map(([command, description]) => ({ command, description }));
   commands.push(...[['last', 'آخرین پیام هر گفتگو'], ['newchat', 'چت جدید'], ['projects', 'پروژه‌ها'], ['newproject', 'پروژه جدید'], ['models', 'انتخاب مدل و استدلال'], ['compat', 'سازگاری و Whisper']].map(([command, description]) => ({ command, description })));
   commands.push({ command: 'accounts', description: 'حساب‌های Codex و تعویض حساب' });
+  commands.push({ command: 'premium', description: 'تلگرام پرمیوم و ظاهر ویژه' });
   await tg.call('setMyCommands', { scope: { type: 'chat', chat_id: settings.ownerId }, commands });
   await tg.call('setChatMenuButton', { chat_id: settings.ownerId, menu_button: { type: 'commands' } });
   if (settings.uiRevision !== UI_REVISION || settings.uiEdition !== UI_EDITION) {
@@ -107,6 +112,7 @@ try {
       }
       if (!isPrivateOwner(update, settings.ownerId)) continue;
       try {
+        bridge.premium.observe(update); await bridge.premium.prepare();
         if (update.callback_query) {
           await dispatchCallback(update.callback_query, tg, ui, inbox, bridge);
         } else if (message) await ui.message(message);

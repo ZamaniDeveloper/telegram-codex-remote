@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.4 - 2026-10-10
+
+- Detect Premium status only from the paired Telegram owner, with automatic updates and a Premium settings screen.
+- Decorate message headers and inline buttons with official custom emoji when the bot has permission; preserve rich-text offsets, callback routing and live message identity.
+- Reuse a received direct message effect for short confirmations, with an appearance toggle and explicit refresh.
+- Fall back after definitive cosmetic validation errors; never replay uncertain sends, spend Stars or change Codex accounts for appearance.
+- Keep the Bot API 20 MB download boundary and existing local Whisper transcription.
+- Verify animated headers, button icons and editing with the deployed bot; cover permission refusal, expiry updates, forwards and non-Premium behavior in tests.
+
 ## 0.8.3 - 2026-10-10
 
 - Automatically pin each live progress card silently and keep its message identity through edits and completion.

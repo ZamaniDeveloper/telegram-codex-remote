@@ -7,18 +7,20 @@ import { QuotaUi } from './quota-ui.mjs';
 import { Features, featureRows, featureMenuRows, ROUTES as FEATURE_ROUTES } from './features.mjs';
 import { text as T } from './feature-text.mjs';
 import { AccountUi } from './account-ui.mjs';
+import { PremiumUi } from './premium-ui.mjs';
 
-export const UI_REVISION = 9;
+export const UI_REVISION = 10;
 export const UI_EDITION = 'fa';
 export const LABELS = {
   chats: '💬 چت‌ها', search: '🔎 جستجو', status: '📊 وضعیت', history: '🗂 پاسخ‌های اخیر',
   bundle: '📦 ارسال‌گروهی‌پیام‌ها', questions: '❓ سؤال‌های Codex', home: '🏠 منوی اصلی', help: 'ℹ️ راهنما',
   usage: '📈 سهمیه', queue: '⏳ صف ارسال',
   accounts: '👤 حساب‌ها',
+  premium: '⭐ تلگرام پرمیوم',
 };
 export function button(text, callback_data, style) { return { text, callback_data, ...(style ? { style } : {}) }; }
 export function mainKeyboard() {
-  return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.accounts], [LABELS.queue, LABELS.help], [LABELS.home]].map(row => row.map(text => ({ text }))),
+  return { keyboard: [[LABELS.chats, LABELS.search], ...featureRows(), [LABELS.status, LABELS.history], [LABELS.bundle, LABELS.questions], [LABELS.usage, LABELS.accounts], [LABELS.queue, LABELS.help], [LABELS.premium, LABELS.home]].map(row => row.map(text => ({ text }))),
     resize_keyboard: true, is_persistent: true, input_field_placeholder: 'پیام بنویس یا از دکمه‌ها استفاده کن' };
 }
 export function mainInlineKeyboard() {
@@ -29,6 +31,7 @@ export function mainInlineKeyboard() {
     [button(LABELS.bundle, 'u:bundle'), button(LABELS.questions, 'u:questions')],
     [button(LABELS.queue, 'u:queue'), button(LABELS.usage, 'u:usage')],
     [button(LABELS.accounts, 'u:accounts', 'primary'), button(LABELS.help, 'u:help')],
+    [button(LABELS.premium, 'u:premium')],
   ] };
 }
 export function navKeyboard() { return { inline_keyboard: [[button('💬 چت‌ها', 'u:chats', 'primary'), button('🏠 منوی اصلی', 'u:home')]] }; }
@@ -44,7 +47,7 @@ export function chatKeyboard(threadId) {
 }
 export class BotUi {
   input = null; replies = new Map();
-  constructor(bridge, inbox) { this.bridge = bridge; this.inbox = inbox; this.tg = bridge.tg; this.chatId = bridge.chatId; this.quota = new QuotaUi(bridge, { stateFile: path.join(inbox.root, 'quota-reset.json') }); this.accounts = new AccountUi(bridge); this.features = new Features(this); this.bridge.latestButton = row => button('🕘', this.features.action({ kind: 'last', row, offset: 0 })); }
+  constructor(bridge, inbox) { this.bridge = bridge; this.inbox = inbox; this.tg = bridge.tg; this.chatId = bridge.chatId; this.quota = new QuotaUi(bridge, { stateFile: path.join(inbox.root, 'quota-reset.json') }); this.accounts = new AccountUi(bridge); this.premium = new PremiumUi(bridge); this.features = new Features(this); this.bridge.latestButton = row => button('🕘', this.features.action({ kind: 'last', row, offset: 0 })); }
   cancelInput() { if (this.input) this.input.used = true; this.input = null; }
   async home(updated = false) {
     this.cancelInput(); this.features.cancelInput(); const w = this.bridge.selected;
@@ -90,6 +93,9 @@ export class BotUi {
     if (FEATURE_ROUTES.includes(route) && route !== 'last') return this.features.route(route);
     if (route === 'usage') return this.quota.show();
     if (route === 'accounts') return this.accounts.show();
+    if (route === 'premium') return this.premium.show();
+    if (route === 'premium-refresh') return this.premium.show(true);
+    if (route === 'premium-toggle') return this.premium.toggle();
     if (route === 'queue') {
       if (!this.bridge.outbox) throw Error('صف ارسال در دسترس نیست.');
       return this.bridge.outbox.show(this.bridge);
@@ -119,7 +125,7 @@ export class BotUi {
       return this.features.showLast(this.bridge.watched.get(last[1]) || { id: last[1] });
     }
     const route = data.slice(2);
-    if (!['home', 'help', 'chats', 'last', 'last-list', 'queue', 'search', 'status', 'history', 'stop', 'questions', 'bundle', 'batch', 'instruction', 'steer', 'usage', 'accounts', ...FEATURE_ROUTES].includes(route)) throw Error('دکمه معتبر نیست.');
+    if (!['home', 'help', 'chats', 'last', 'last-list', 'queue', 'search', 'status', 'history', 'stop', 'questions', 'bundle', 'batch', 'instruction', 'steer', 'usage', 'accounts', 'premium', 'premium-refresh', 'premium-toggle', ...FEATURE_ROUTES].includes(route)) throw Error('دکمه معتبر نیست.');
     return this.route(route);
   }
   async consumePrompt(input, text) {
@@ -139,6 +145,7 @@ export class BotUi {
       if (/^\/queue(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('queue');
       if (/^\/(usage|quota)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('usage');
       if (/^\/accounts(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('accounts');
+      if (/^\/premium(?:@\w+)?\s*$/.test(message.text.trim())) return this.route('premium');
       if (/^\/(start|menu|home|help)(?:@\w+)?\s*$/.test(message.text.trim())) return this.route(message.text.trim().startsWith('/help') ? 'help' : 'home');
       if (await this.features.message(message)) return;
       const steer = /^\/steer(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(message.text.trim());

@@ -39,7 +39,7 @@ test('all ways of opening main menu attach action buttons even with the reply ke
     const keyboard = f.sent[0].markup;
     assert.equal(keyboard.keyboard, undefined);
     const actions = keyboard.inline_keyboard.flat().map(b => b.callback_data);
-    for (const action of ['chats', 'search', 'last-list', 'newchat', 'projects', 'newproject', 'models', 'compat', 'status', 'history', 'bundle', 'questions', 'queue', 'usage', 'accounts', 'help']) assert.ok(actions.includes('u:' + action), action);
+    for (const action of ['chats', 'search', 'last-list', 'newchat', 'projects', 'newproject', 'models', 'compat', 'status', 'history', 'bundle', 'questions', 'queue', 'usage', 'accounts', 'help', 'premium']) assert.ok(actions.includes('u:' + action), action);
     assert.equal(new Set(actions).size, actions.length);
     assert.ok(actions.every(data => Buffer.byteLength(data) <= 64));
     assert.equal(f.bridge.selected, f.w); assert.equal(f.reads.length, 0);
