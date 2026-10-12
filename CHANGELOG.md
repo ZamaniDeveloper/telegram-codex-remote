@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.2 - 2026-10-12
+
+- Persist the exact accepted turn ID from the desktop response, so completion can be matched after a reconnect even if a cancelled turn has no user-message item.
+- Preserve only request identity in compact turn snapshots; retire positively matched completed, failed or interrupted requests, including previously uncertain deliveries, without replaying them.
+- Add queue refresh and a two-step owner confirmation for legacy accepted requests with no recoverable identity; require fresh idle state and do not resend the old request.
+- Keep queue reconciliation running when Telegram message delivery fails.
+- Add regression coverage for receipts across restart, missing user items, conflicting identity, confirmation expiry and delivery failures.
+
 ## 0.9.1 - 2026-10-10
 
 - Recover queues blocked by an empty, unidentified pending turn after a confirmed terminal turn while desktop runtime is idle. Preserve active or ambiguous turns and never mutate the patch mirror.

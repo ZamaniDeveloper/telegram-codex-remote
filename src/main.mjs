@@ -16,6 +16,7 @@ import { DesktopRecovery } from './desktop-recovery.mjs';
 import { Premium } from './premium.mjs';
 import { miniappConfig } from './miniapp-auth.mjs';
 import { createMiniApp } from './miniapp.mjs';
+import { maintainBridge } from './maintenance.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -95,13 +96,11 @@ try {
   flushTimer = setInterval(async () => {
     if (!bridge || flushing) return; flushing = true;
     try {
-      await inbox.flush(); await bridge.reconnect();
-      if (restoreSelection && Date.now() - lastRestore > 30000) {
-        lastRestore = Date.now(); await bridge.select(restoreSelection, { notify: false });
-      }
-      await bridge.flush();
-      await bridge.outbox.follow(bridge); await bridge.outbox.flush(bridge);
-      await ui.accounts.poll();
+      await maintainBridge({bridge,inbox,ui,restore:async()=>{
+        if (restoreSelection && Date.now() - lastRestore > 30000) {
+          lastRestore = Date.now(); await bridge.select(restoreSelection, { notify: false });
+        }
+      }});
     }
     catch { /* Retry connection/stream sync, never resend a user action. */ }
     finally { flushing = false; }

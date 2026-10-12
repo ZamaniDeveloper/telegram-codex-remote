@@ -7,6 +7,11 @@ import { card } from './format.mjs';
 import { text as T } from './outbox-text.mjs';
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function acceptedTurnId(response) {
+  if (response?.resultType && response.resultType !== 'success') return null;
+  const id = response?.result?.result?.turn?.id ?? response?.result?.turn?.id ?? response?.turn?.id;
+  return ID.test(id || '') ? id : null;
+}
 export const isBusy = w => lastTurn(w?.state)?.status === 'inProgress' || w?.state?.threadRuntimeStatus?.type === 'active';
 export class Outbox {
   entries = []; flushing = false;
@@ -35,13 +40,18 @@ export class Outbox {
     return entry;
   }
   observe(entry, w) {
-    if (entry.status !== 'awaiting' || !w?.synced) return false;
+    if (!['awaiting', 'uncertain'].includes(entry.status) || !w?.synced) return false;
     const turns = turnsOf(w.state);
-    const match = turns.find(t => (t.items || []).some(i => i.type === 'userMessage' && [i.clientId, i.clientUserMessageId, i.id].includes(entry.clientId)));
-    const actual = match;
+    const match = turns.find(t => t.clientUserMessageId === entry.clientId || t.params?.clientUserMessageId === entry.clientId
+      || (t.items || []).some(i => i.type === 'userMessage' && [i.clientId, i.clientUserMessageId, i.id].includes(entry.clientId)));
+    const receipt = ID.test(entry.turnId || '') && turns.find(t => turnId(t) === entry.turnId);
+    if (match && receipt && turnId(match) !== turnId(receipt)) return false;
+    if (receipt && [receipt.clientUserMessageId, receipt.params?.clientUserMessageId].some(id => id && id !== entry.clientId)) return false;
+    const actual = match || receipt;
     if (!actual || !turnId(actual)) return false;
     if (entry.turnId !== turnId(actual)) { entry.turnId = turnId(actual); this.save(); }
-    return ['completed', 'failed', 'interrupted'].includes(actual.status) && !isBusy(w);
+    if (entry.status === 'uncertain') { entry.status = 'awaiting'; this.save(); }
+    return ['completed', 'failed', 'interrupted'].includes(actual.status);
   }
   async follow(bridge) {
     for (const entry of this.entries) if (!bridge.watched.has(entry.threadId)) {
@@ -58,14 +68,15 @@ export class Outbox {
         let entry = this.entries.find(e => e.threadId === id);
         const w = bridge.watched.get(id);
         if (!w?.synced || !w.owner) continue;
-        if (entry?.status === 'awaiting' && this.observe(entry, w)) {
+        if (['awaiting', 'uncertain'].includes(entry?.status) && this.observe(entry, w)) {
           this.entries = this.entries.filter(e => e !== entry); this.save();
           entry = this.entries.find(e => e.threadId === id);
         }
         if (!entry || entry.status !== 'queued' || isBusy(w)) continue;
         entry.status = 'dispatching'; entry.baseTurnId = turnId(lastTurn(w.state)) || null; this.save();
         try {
-          await bridge.ipc.request('thread-follower-start-turn', { conversationId: id, turnStart: { request: { threadId: id, input: entry.input, clientUserMessageId: entry.clientId }, context: { inheritThreadSettings: true } } }, w.owner, 60000);
+          const response = await bridge.ipc.request('thread-follower-start-turn', { conversationId: id, turnStart: { request: { threadId: id, input: entry.input, clientUserMessageId: entry.clientId }, context: { inheritThreadSettings: true } } }, w.owner, 60000);
+          const accepted = acceptedTurnId(response); if (accepted) entry.turnId = accepted;
           entry.status = 'awaiting'; this.save();
           if (entry.notifyOnDispatch) {
             entry.notifyOnDispatch = false; this.save();
@@ -85,14 +96,45 @@ export class Outbox {
     offset = Math.max(0, Math.min(offset, Math.floor((this.entries.length - 1) / 5) * 5));
     for (const entry of this.entries.slice(offset, offset + 5)) {
       const preview = entry.input.filter(i => i.type === 'text').map(i => i.text).join('\n').slice(0, 200);
-      await bridge.tg.send(bridge.chatId, card(T.title, `${entry.title || entry.threadId}\n${T[entry.status + 'Status']}\n\n${preview}`), ['queued', 'uncertain'].includes(entry.status) ? this.markup(entry) : undefined);
+      const w = bridge.watched.get(entry.threadId);
+      const recovery = entry.status === 'awaiting' && w?.synced && !isBusy(w);
+      const markup = recovery ? { inline_keyboard: [[{text:T.confirmFinished,callback_data:`o:${entry.id}:review`}]] } : ['queued', 'uncertain'].includes(entry.status) ? this.markup(entry) : undefined;
+      await bridge.tg.send(bridge.chatId, card(T.title, `${entry.title || entry.threadId}\n${T[entry.status + 'Status']}\n\n${preview}${recovery?'\n\n'+T.needsReview:''}`), markup);
     }
     const navigation = [];
     if (offset) navigation.push({ text: T.previous, callback_data: `o:page:${offset - 5}` });
     if (offset + 5 < this.entries.length) navigation.push({ text: T.next, callback_data: `o:page:${offset + 5}` });
-    await bridge.tg.send(bridge.chatId, `${offset + 1}–${Math.min(offset + 5, this.entries.length)} / ${this.entries.length}`, { inline_keyboard: [...(navigation.length ? [navigation] : []), [{ text: T.home, callback_data: 'u:home' }]] });
+    await bridge.tg.send(bridge.chatId, `${offset + 1}–${Math.min(offset + 5, this.entries.length)} / ${this.entries.length}`, { inline_keyboard: [...(navigation.length ? [navigation] : []), [{text:T.refresh,callback_data:'o:refresh'}], [{ text: T.home, callback_data: 'u:home' }]] });
   }
   async callback(data, bridge) {
+    if (data === 'o:refresh') {
+      await this.follow(bridge);
+      for (const id of new Set(this.entries.map(e=>e.threadId))) await bridge.refreshQueued(id);
+      await this.flush(bridge); return this.show(bridge);
+    }
+    const recover = /^o:([0-9a-f-]{36}):review$/i.exec(data);
+    if (recover) {
+      const entry = this.entries.find(e=>e.id===recover[1]);
+      if (!entry || entry.status !== 'awaiting' || this.flushing || bridge.accountSwitching) throw Error(T.stale);
+      await bridge.refreshQueued(entry.threadId);
+      const w=bridge.watched.get(entry.threadId);
+      if (!w?.synced || !w.owner || isBusy(w)) throw Error(T.busyRecovery);
+      const token=randomUUID();
+      (this.reviews ||= new Map()).set(token,{entryId:entry.id,threadId:entry.threadId,expires:Date.now()+120000});
+      return bridge.tg.send(bridge.chatId,card(T.title,`${entry.title || entry.threadId}\n\n${T.confirmReview}`),{inline_keyboard:[[{text:T.confirmFinished,callback_data:`o:confirm:${token}`}],[{text:T.title,callback_data:'u:queue'}]]});
+    }
+    const confirmation=/^o:confirm:([0-9a-f-]{36})$/i.exec(data);
+    if (confirmation) {
+      const review=this.reviews?.get(confirmation[1]);this.reviews?.delete(confirmation[1]);
+      const entry=review && this.entries.find(e=>e.id===review.entryId && e.threadId===review.threadId);
+      if (!entry || review.expires < Date.now() || entry.status !== 'awaiting' || this.flushing || bridge.accountSwitching) throw Error(T.stale);
+      await bridge.refreshQueued(entry.threadId);
+      const w=bridge.watched.get(entry.threadId);
+      if (!w?.synced || !w.owner || isBusy(w) || this.flushing || bridge.accountSwitching || !this.entries.includes(entry)) throw Error(T.busyRecovery);
+      this.entries=this.entries.filter(e=>e!==entry);this.save();
+      await bridge.tg.send(bridge.chatId,T.recovered);
+      await this.flush(bridge,entry.threadId);return this.show(bridge);
+    }
     const page = /^o:page:(\d{1,3})$/.exec(data);
     if (page) return this.show(bridge, Number(page[1]));
     const match = /^o:([0-9a-f-]{36}):cancel$/i.exec(data), entry = match && this.entries.find(e => e.id === match[1]);

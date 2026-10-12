@@ -8,6 +8,10 @@ export function compactState(state) {
   result.turns = turnsOf(state).map(turn => {
     const value = {};
     for (const key of ['id', 'turnId', 'status', 'error', 'durationMs', 'startedAt', 'completedAt']) if (Object.hasOwn(turn, key)) value[key] = turn[key];
+    // A cancelled start can have no userMessage item. Preserve only its request
+    // identity, never the full request params, to reconcile the durable queue.
+    if (typeof turn.params?.clientUserMessageId === 'string') value.clientUserMessageId = turn.params.clientUserMessageId;
+    else if (typeof turn.clientUserMessageId === 'string') value.clientUserMessageId = turn.clientUserMessageId;
     value.items = (turn.items || []).filter(item => ['agentMessage', 'userMessage', 'steeringUserMessage', 'fileChange'].includes(item.type) || approvalItems.has(item.id));
     return value;
   });

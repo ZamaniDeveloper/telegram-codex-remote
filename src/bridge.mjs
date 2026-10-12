@@ -138,6 +138,13 @@ export class Bridge {
       (w.snapshotWaiters ||= new Set()).add(finish);
     });
   }
+  async refreshQueued(id) {
+    if (this.accountSwitching) throw Error('Account switch in progress');
+    const w=this.watched.get(id);if (!w) throw Error('Conversation is not watched');
+    if (!w.owner) w.owner=await this.ipc.owner(id);
+    const ready=this.waitSnapshot(w);
+    await this.resync(w);await ready;
+  }
   resync(w) {
     w.synced = false;
     if (w.resyncing) return w.resyncing;
