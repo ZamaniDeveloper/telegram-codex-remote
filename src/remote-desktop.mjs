@@ -1,21 +1,37 @@
 // Copyright (c) 2026 Mohsen Zamani / ZamaniDeveloper. See LICENSE.
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { createReadStream } from 'node:fs';
 export class RemoteDesktop extends EventEmitter {
-  connected = false; connecting = null; abort = null; closing = false;
+  eventCursor = null; connected = false; connecting = null; abort = null; closing = false;
   constructor(url, secret, { eventTimeoutMs = 35000 } = {}) {
     super(); const parsed = new URL(url);
     if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || parsed.username || parsed.password) throw Error('Connector URL must be an SSH-forwarded localhost HTTP endpoint');
     if (!secret || secret.length < 32) throw Error('Connector secret is missing');
     this.url = parsed.origin; this.secret = secret; this.eventTimeoutMs = eventTimeoutMs;
   }
+  async receipt(id) {
+    const response = await fetch(`${this.url}/receipts/${id}`, { headers: { authorization: `Bearer ${this.secret}` }, signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return null; return (await response.json()).result;
+  }
+  async startReceipt(threadId, clientId) {
+    const receipt = await this.receipt(clientId);
+    if (receipt?.state !== 'complete' || receipt.metadata?.command !== 'thread-follower-start-turn'
+      || receipt.metadata.threadId !== threadId || receipt.metadata.clientId !== clientId) return null;
+    return receipt.result;
+  }
   async rpc(method, args) {
-    let response;
+    const mutating = ['request', 'createChat', 'quotaReset', 'accountActivate', 'accountLoginStart', 'accountLoginCancel'].includes(method);
+    const operationId = mutating ? (method === 'request' && args[0] === 'thread-follower-start-turn' ? args[1]?.turnStart?.request?.clientUserMessageId || randomUUID() : randomUUID()) : undefined;
+    let response, body;
     try { response = await fetch(this.url + '/rpc', { method: 'POST', headers: {
       authorization: `Bearer ${this.secret}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ method, args }), signal: AbortSignal.timeout(method === 'transcribeAttachment' ? 660000 : method === 'accountActivate' ? 300000 : ['models', 'projects', 'createChat', 'latestMessage'].includes(method) ? 180000 : ['request', 'quotaRead', 'quotaReset', 'accountsRead', 'accountLoginStart'].includes(method) ? 65000 : 25000) }); }
-    catch { throw Error('ارتباط با رابط ویندوز برقرار نشد؛ روشن‌بودن و اتصال اینترنت ویندوز را بررسی کن. درخواست خودکار تکرار نشد.'); }
-    const body = await response.json();
+      body: JSON.stringify({ method, args, operationId }), signal: AbortSignal.timeout(method === 'transcribeAttachment' ? 660000 : method === 'accountActivate' ? 300000 : ['models', 'projects', 'createChat', 'latestMessage'].includes(method) ? 180000 : ['request', 'quotaRead', 'quotaReset', 'accountsRead', 'accountLoginStart'].includes(method) ? 65000 : 25000) }); body = await response.json(); }
+    catch {
+      if (operationId) {
+        try { const receipt = await this.receipt(operationId); if (receipt?.state === 'complete') return receipt.result; } catch {}
+      }
+      throw Error('ارتباط با رابط ویندوز برقرار نشد؛ روشن‌بودن و اتصال اینترنت ویندوز را بررسی کن. درخواست خودکار تکرار نشد.'); }
     if (!response.ok || body.error) throw Error(body.error || 'Connector request failed');
     return body.result;
   }
@@ -27,7 +43,7 @@ export class RemoteDesktop extends EventEmitter {
       const abort = new AbortController(); this.abort = abort;
       const timer = setTimeout(() => abort.abort(), 12000);
       let response;
-      try { response = await fetch(this.url + '/events', { headers: { authorization: `Bearer ${this.secret}` }, signal: abort.signal }); }
+      try { response = await fetch(this.url + '/events', { headers: { authorization: `Bearer ${this.secret}`, ...(this.eventCursor ? { 'last-event-id': this.eventCursor } : {}) }, signal: abort.signal }); }
       catch { throw Error('رابط ویندوز هنوز به سرور وصل نیست.'); }
       finally { clearTimeout(timer); }
       if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) { abort.abort(); throw Error('Connector authentication or protocol failed'); }
@@ -54,6 +70,18 @@ export class RemoteDesktop extends EventEmitter {
         const data = frame.split('\n').filter(l => l.startsWith('data: ')).map(l => l.slice(6)).join('\n');
         if (!data) continue;
         const event = JSON.parse(data);
+        const id = frame.split('\n').find(line => line.startsWith('id: '))?.slice(4);
+        if (id) {
+          const incoming = /^([0-9a-f-]{36}):(\d+)$/.exec(id);
+          if (!incoming) throw Error('Invalid event sequence');
+          const previous = /^([0-9a-f-]{36}):(\d+)$/.exec(this.eventCursor || '');
+          if (previous && previous[1] === incoming[1]) {
+            if (Number(incoming[2]) <= Number(previous[2])) continue;
+            if (Number(incoming[2]) !== Number(previous[2]) + 1) this.emit('disconnected');
+          }
+          this.eventCursor = id;
+        }
+        if (event.type === 'reset') { this.eventCursor = null; this.emit('disconnected'); continue; }
         if (event.type === 'broadcast') this.emit('broadcast', event.message);
         else if (event.type === 'disconnected') { this.emit('disconnected'); }
       }
@@ -61,6 +89,7 @@ export class RemoteDesktop extends EventEmitter {
     } finally { clearTimeout(silence); }
   }
   async owner(id) { await this.connect(); return this.rpc('owner', [id]); }
+  snapshot(id, owner) { return this.rpc('snapshot', [id, owner]); }
   follow(...args) { return this.rpc('follow', args).catch(() => { this.emit('disconnected'); }); }
   request(...args) { return this.rpc('request', args); }
   listThreads(...args) { return this.rpc('listThreads', args); }

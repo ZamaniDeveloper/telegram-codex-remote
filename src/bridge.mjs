@@ -25,7 +25,8 @@ export function steeringParams(w, input) {
 }
 export class Bridge {
   watched = new Map(); actions = new Map(); selected = null; selectionEpoch = 0;
-  constructor(telegram, chatId, ipc = new DesktopIpc(), catalog = listThreads, { snapshotTimeoutMs = 30000, queuedResyncIntervalMs = 30000 } = {}) {
+  constructor(telegram, chatId, ipc = new DesktopIpc(), catalog = listThreads, { snapshotTimeoutMs = 30000, queuedResyncIntervalMs = 30000, deliveryStore = null } = {}) {
+    this.deliveryStore = deliveryStore;
     this.snapshotTimeoutMs = snapshotTimeoutMs;
     this.queuedResyncIntervalMs = queuedResyncIntervalMs;
     this.tg = telegram; this.chatId = chatId; this.ipc = ipc; this.catalog = catalog; this.questions = new QuestionManager(this);
@@ -43,7 +44,7 @@ export class Bridge {
           && Date.now() - (w.lastResyncAttempt || 0) >= this.queuedResyncIntervalMs) await this.resync(w);
         continue;
       }
-      try { w.owner = await this.ipc.owner(w.id); await this.resync(w); }
+      try { w.owner = await this.ipc.owner(w.id); if (!await this.restoreLiveSnapshot(w)) await this.resync(w); }
       catch {
         w.owner = null;
         // Reopen only the selected existing chat, with bounded URI attempts.
@@ -103,7 +104,9 @@ export class Bridge {
     if (!w) { w = { id: row.id, title: row.title, owner, synced: false, revision: null, state: null,
       messages: new Map(), sentRequests: new Set(), seenTurns: new Set() }; this.watched.set(row.id, w); }
     if (w.owner !== owner) { w.synced = false; w.state = null; w.revision = null; }
+    this.restoreDelivery(w);
     w.owner = owner;
+    if (!w.synced) await this.restoreLiveSnapshot(w);
     if (!w.synced) {
       const ready = this.waitSnapshot(w);
       this.ipc.follow(row.id, owner); await ready;
@@ -125,8 +128,30 @@ export class Bridge {
     const owner = await this.ipc.owner(row.id);
     const w = { id: row.id, title: row.title, owner, synced: false, revision: null, state: null,
       messages: new Map(), sentRequests: new Set(), seenTurns: new Set() };
+    this.restoreDelivery(w);
     this.watched.set(row.id, w);
     try { await this.ipc.follow(row.id, owner); } catch (error) { w.owner = null; throw error; }
+  }
+  restoreDelivery(w) {
+    if (w.deliveryRestored) return;
+    w.deliveryRestored = true;
+    const saved = this.deliveryStore?.read(w.id);
+    if (saved) {
+      w.seenTurns = new Set(saved.seenTurns);
+      w.messages = new Map(saved.messages);
+      w.initialized = true;
+    }
+  }
+  saveDelivery(w) { this.deliveryStore?.save(w); }
+  async restoreLiveSnapshot(w) {
+    if (!this.ipc.snapshot) return false;
+    try {
+      const snapshot = await this.ipc.snapshot(w.id, w.owner);
+      if (!snapshot || snapshot.owner !== w.owner || !Number.isSafeInteger(snapshot.revision)) return false;
+      this.onBroadcast({ method: 'thread-stream-state-changed', version: 11, sourceClientId: w.owner,
+        params: { hostId: 'local', conversationId: w.id, change: { type: 'snapshot', revision: snapshot.revision, conversationState: snapshot.state } } });
+      return w.synced;
+    } catch { return false; }
   }
   waitSnapshot(w) {
     return new Promise((resolve, reject) => {
@@ -167,6 +192,7 @@ export class Bridge {
       if (!w.initialized) {
         w.initialized = true;
         for (const turn of turnsOf(w.state)) if (turn.status !== 'inProgress') w.seenTurns.add(turnId(turn));
+        this.saveDelivery(w);
       }
       for (const finish of [...(w.snapshotWaiters || [])]) finish();
     } else if (change.type === 'patches') {
@@ -290,6 +316,7 @@ export class Bridge {
   }
   async flush() {
     for (const w of this.watched.values()) {
+      try {
       for (const record of w.messages.values()) await this.pinLive(record);
       if (!w.synced) continue;
       await this.questions.sync(w);
@@ -306,7 +333,10 @@ export class Bridge {
           { text: '✅ تأیید همین درخواست', callback_data: `a:${token}:accept`, style: 'success' }, { text: '⛔ رد', callback_data: `a:${token}:decline`, style: 'danger' } ]] });
         w.sentRequests.add(req.id);
       }
-      const turn = lastTurn(w.state); const id = turnId(turn); if (!id || w.seenTurns.has(id)) continue;
+      // Completed turns can accumulate while Telegram is offline and the next
+      // queued request has already started. Deliver every unseen turn in order.
+      for (const turn of turnsOf(w.state)) {
+      const id = turnId(turn); if (!id || w.seenTurns.has(id)) continue;
       const text = assistantText(turn), final = turn.status !== 'inProgress';
       if (!text.trim() && !final) continue;
       const parts = splitRich(turnCard(w.title, text, turn.status, turn.error?.message, turn.durationMs));
@@ -316,16 +346,18 @@ export class Bridge {
       const validControls = this.actions.get(existingToken)?.expires > Date.now() + 60000;
       const markup = previous?.markup && validControls && !final ? previous.markup : this.controls(w, turn, final);
       if (previous) await this.tg.edit(this.chatId, previous.id, preview, markup);
-      else { const sent = await this.tg.send(this.chatId, preview, markup); w.messages.set(id, { id: sent.message_id }); }
-      const record = w.messages.get(id); record.signature = signature; record.markup = markup;
+      else { const sent = await this.tg.send(this.chatId, preview, markup); w.messages.set(id, { id: sent.message_id }); this.saveDelivery(w); }
+      const record = w.messages.get(id); record.signature = signature; record.markup = markup; this.saveDelivery(w);
       if (!final) record.pinWanted = true;
       await this.pinLive(record);
       if (final) {
         for (let i = record.finalIndex || 1; i < parts.length; i++) {
-          await this.tg.send(this.chatId, parts[i], i === parts.length - 1 ? markup : undefined); record.finalIndex = i + 1;
+          await this.tg.send(this.chatId, parts[i], i === parts.length - 1 ? markup : undefined); record.finalIndex = i + 1; this.saveDelivery(w);
         }
-        w.seenTurns.add(id);
+        w.seenTurns.add(id); this.saveDelivery(w);
       }
+      }
+      } catch { /* Retry this chat delivery later; other chats remain independent. */ }
     }
   }
   close() { for (const w of this.watched.values()) if (w.owner) this.ipc.follow(w.id, w.owner, false); this.ipc.close(); }

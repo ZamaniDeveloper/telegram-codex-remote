@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Telegram } from './telegram.mjs';
 import { Bridge } from './bridge.mjs';
 import { isPrivateOwner, matchesPairCode } from './auth.mjs';
+import { DeliveryState } from './delivery-state.mjs';
 import { RemoteDesktop } from './remote-desktop.mjs';
 import { Inbox } from './inbox.mjs';
 import { BotUi, UI_REVISION, UI_EDITION } from './ui.mjs';
@@ -16,7 +17,7 @@ import { DesktopRecovery } from './desktop-recovery.mjs';
 import { Premium } from './premium.mjs';
 import { miniappConfig } from './miniapp-auth.mjs';
 import { createMiniApp } from './miniapp.mjs';
-import { maintainBridge } from './maintenance.mjs';
+import { maintenanceScheduler } from './maintenance.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data'); mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -31,14 +32,15 @@ if (process.env.TELEGRAM_OWNER_ID) {
 }
 const releaseLock = acquirePidLock(lockFile, 'Telegram bot');
 function save() { writeFileSync(stateFile + '.tmp', JSON.stringify(settings, null, 2), { mode: 0o600 }); renameSync(stateFile + '.tmp', stateFile); }
-const tg = new Telegram(token); let running = true, bridge = null, inbox = null, ui = null, flushTimer, restoreSelection = null, lastRestore = 0;
+const tg = new Telegram(token); let running = true, bridge = null, inbox = null, ui = null, flushTimer, maintenance, deliveryStore, restoreSelection = null, lastRestore = 0;
 const appConfig = miniappConfig(); let appServer;
 function stop() {
-  running = false; clearInterval(flushTimer);
+  running = false; clearInterval(flushTimer); maintenance?.stop();
   appServer?.close();
   void bridge?.desktopRecovery?.stop();
   ui?.accounts.close().catch(() => {});
   try { bridge?.close(); } catch {}
+  deliveryStore?.close();
   releaseLock();
 }
 process.on('SIGINT', () => { stop(); process.exit(); });
@@ -46,10 +48,11 @@ process.on('SIGTERM', () => { stop(); process.exit(); });
 process.on('exit', stop);
 const pairCode = randomBytes(6).toString('hex'); const pairExpires = Date.now() + 10 * 60 * 1000;
 function attachOwner() {
+  deliveryStore = new DeliveryState(path.join(dataDir, 'telegram-delivery.sqlite'));
   if (process.env.CONNECTOR_URL) {
     const remote = new RemoteDesktop(process.env.CONNECTOR_URL, process.env.CONNECTOR_SECRET);
-    bridge = new Bridge(tg, settings.ownerId, remote, (...args) => remote.listThreads(...args));
-  } else bridge = new Bridge(tg, settings.ownerId);
+    bridge = new Bridge(tg, settings.ownerId, remote, (...args) => remote.listThreads(...args), { deliveryStore });
+  } else bridge = new Bridge(tg, settings.ownerId, undefined, undefined, { deliveryStore });
   bridge.premium = new Premium(tg, settings.ownerId, { state: settings.telegramPremium, save: state => { settings.telegramPremium = state; save(); } });
   tg.premium = bridge.premium;
   bridge.outbox = new Outbox(path.join(dataDir, 'outbox.json'));
@@ -87,24 +90,21 @@ try {
   const bot = await tg.call('getMe');
   const webhook = await tg.call('getWebhookInfo');
   if (webhook.url) throw Error('این ربات webhook فعال دارد؛ از BotFather یک ربات جدید برای این اتصال بساز.');
-  const backlog = await tg.call('getUpdates', { offset: -1, timeout: 0, allowed_updates: ['message', 'callback_query'] });
-  if (backlog.length) settings.offset = backlog.at(-1).update_id + 1;
+  // Resume from the persisted offset. Never discard commands received while offline.
   save(); console.log(`Telegram bot: @${bot.username}`);
   if (settings.ownerId) { attachOwner(); await setupUi(); }
   else console.log(`برای اتصال حساب خودت، در چت خصوصی ربات بفرست: /pair ${pairCode}\nاین کد ده دقیقه اعتبار دارد.`);
-  let flushing = false;
-  flushTimer = setInterval(async () => {
-    if (!bridge || flushing) return; flushing = true;
-    try {
-      await maintainBridge({bridge,inbox,ui,restore:async()=>{
-        if (restoreSelection && Date.now() - lastRestore > 30000) {
-          lastRestore = Date.now(); await bridge.select(restoreSelection, { notify: false });
-        }
-      }});
-    }
-    catch { /* Retry connection/stream sync, never resend a user action. */ }
-    finally { flushing = false; }
-  }, 2500);
+  const tickMaintenance = () => {
+    if (!bridge) return;
+    maintenance ||= maintenanceScheduler({bridge,inbox,ui,restore:async()=>{
+      if (restoreSelection && Date.now() - lastRestore > 30000) {
+        lastRestore = Date.now(); await bridge.select(restoreSelection, { notify: false });
+      }
+    }});
+    maintenance.tick();
+  };
+  flushTimer = setInterval(tickMaintenance, 1500);
+  tickMaintenance();
   while (running) {
     let updates;
     try { updates = await tg.call('getUpdates', { offset: settings.offset || 0, timeout: 25, allowed_updates: ['message', 'callback_query'] }); }

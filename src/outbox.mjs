@@ -68,6 +68,14 @@ export class Outbox {
         let entry = this.entries.find(e => e.threadId === id);
         const w = bridge.watched.get(id);
         if (!w?.synced || !w.owner) continue;
+        if (entry?.status === 'uncertain' && bridge.ipc.startReceipt && Date.now() - (entry.lastReceiptCheck || 0) >= 15000) {
+          entry.lastReceiptCheck = Date.now();
+          try {
+            const receipt = await bridge.ipc.startReceipt(id, entry.clientId);
+            const accepted = acceptedTurnId(receipt);
+            if (accepted) { entry.turnId = accepted; entry.status = 'awaiting'; this.save(); }
+          } catch { /* Read-only receipt recovery; never resend the original request. */ }
+        }
         if (['awaiting', 'uncertain'].includes(entry?.status) && this.observe(entry, w)) {
           this.entries = this.entries.filter(e => e !== entry); this.save();
           entry = this.entries.find(e => e.threadId === id);

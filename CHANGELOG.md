@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0 - 2026-10-12
+
+- Preserve control of the existing desktop thread owner; no independent execution engine is introduced.
+- Send compact state deltas for small updates, with revision validation and snapshot fallback.
+- Add bounded sequenced SSE replay with Last-Event-ID; expired cursors and connector restarts require fresh state.
+- Persist command receipts in SQLite WAL before desktop dispatch; reject duplicate pending commands and conflicting identities. Recover lost acceptance responses through read-only receipt lookup.
+- Separate desktop reconciliation, Telegram delivery and account polling into independently locked maintenance lanes.
+- Persist Telegram delivery checkpoints, reuse message IDs after bot restart, and deliver all unseen completed turns when newer work has already started.
+- Resume Telegram polling from the saved offset instead of discarding offline updates.
+- Add outage, restart, duplicate-write, receipt binding, delta-size and blocked-delivery regression coverage.
+
 ## 0.9.4 - 2026-10-12
 
 - Keep the English timeout regression assertion fully English; retain all queue receipt and outage recovery fixes.

@@ -1,0 +1,17 @@
+# Desktop connection reliability (0.10.0)
+
+TeleCodex still controls the owner of the existing Codex desktop conversation via the private, version-checked Windows IPC adapter. This release does not run a second execution engine for active desktop work. Existing server-to-Windows HTTP/SSE remains behind the authenticated, loopback-only SSH tunnel.
+
+Small desktop updates are projected into patches against the compact mirror. Raw desktop patch paths are never applied to filtered history. Revisions are checked; large changes fall back to snapshots. A synthetic regression with 100 historical answers transmits over 95% fewer bytes for one small edit. This is a payload measurement, not a promise of faster model execution or equivalent improvement for every chat.
+
+SSE events carry a connector-session UUID and increasing sequence. Reconnect uses `Last-Event-ID` to replay the retained window (512 events, at most 16 MiB). This window is in memory. When it expires, the sequence is invalid, or the connector restarts, observation is invalidated and a fresh desktop snapshot is required. Execution state is never restored from an old disk snapshot. Reconnect can read the live in-memory connector mirror after verifying its current desktop owner; an IPC disconnect or revision gap invalidates that mirror.
+
+The connector saves mutating command identities and acceptance results in `data/connector-receipts.sqlite` using SQLite WAL with full synchronous commits. A duplicate completed command returns its original receipt; a conflicting identity or unfinished receipt never executes again. If an HTTP response is lost, the client only reads the receipt. An uncertain queued start can recover its exact accepted turn ID from a receipt bound to the original conversation and client message. Pending receipts are never automatically deleted. Completed receipts expire after seven days; the journal refuses new writes at 10,000 records rather than removing uncertain identities.
+
+Desktop reconciliation, Telegram delivery and account polling run in independent maintenance lanes with a 1.5-second tick and no overlapping invocation in the same lane. A blocked Telegram call does not prevent desktop reconciliation. Each chat's delivery failure is isolated; completed responses are delivered in order even after a later turn starts.
+
+Telegram message IDs and completed-turn checkpoints survive bot restart in `data/telegram-delivery.sqlite`. The first observation of a previously unseen conversation skips old completed history; subsequent observations retain delivery continuity. Unknown Telegram send outcomes can still produce duplicate notifications because Telegram does not provide an exactly-once send receipt. Commands use conservative at-most-once dispatch instead of blind retries.
+
+Upgrade the bot and Windows connector together. Existing `data/outbox.json`, credentials, owner binding and project files are preserved. SQLite files, WAL sidecars and runtime state are private and excluded from releases; back them up while the processes are stopped or with a SQLite-aware backup. No public graphical panel is enabled by this update.
+
+Checks cover real localhost HTTP/SSE loss and reconnect, receipt persistence across process recreation, pending/conflicting duplicate writes, offline completion, delivery checkpoint reuse and independence of a blocked delivery lane. Actual internet latency, real-account model execution and Telegram handset delivery remain separate live checks.

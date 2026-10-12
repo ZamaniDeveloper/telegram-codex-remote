@@ -97,3 +97,7 @@ An isolated authentication worker performs device-code login. Profiles remain in
 ## Desktop recovery (0.8.2)
 
 A single-flight Windows watchdog checks the real desktop IPC connection every five seconds and launches only an absent installed desktop. The connector waits for an in-flight recovery before account activation and blocks watchdog attempts during activation. Recovery restores observation of the selected existing chat through a throttled registered URI, without issuing model turns. SSH transport remains authenticated and loopback-only; retries use bounded backoff and server ClientAlive keepalives prevent dead sessions from retaining the forwarded port.
+
+## Durable desktop transport (0.10)
+
+See [connection reliability](RELIABILITY.en.md) for compact deltas, bounded SSE replay, SQLite command receipts, Telegram delivery checkpoints and independent maintenance lanes. The desktop IPC remains the execution authority; no standalone app-server is used to resume an active desktop conversation.

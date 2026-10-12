@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Mohsen Zamani / ZamaniDeveloper. See LICENSE.
+import { CommandReceipts } from './reliability.mjs';
 import { createConnector } from './connector-server.mjs';
 import { AttachmentStore } from './attachments.mjs';
 import { tunnelOptions } from './config.mjs';
@@ -11,7 +12,7 @@ export function startConnector({ root = path.resolve(path.dirname(fileURLToPath(
   const options = tunnelOptions(env, root);
   const cleanup = acquirePidLock(path.join(root, 'data', 'connector.pid'), 'Windows connector');
   let server;
-  try { server = createConnector({ secret: options.secret, attachments: new AttachmentStore(path.join(root, 'data', 'attachments')), desktopRecovery }); }
+  try { server = createConnector({ secret: options.secret, receipts: new CommandReceipts(path.join(root, 'data', 'connector-receipts.sqlite')), attachments: new AttachmentStore(path.join(root, 'data', 'attachments')), desktopRecovery }); }
   catch (e) { cleanup(); throw e; }
   let stopped = false, ssh = null, timer = null, failures = 0;
   function tunnel() {

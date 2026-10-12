@@ -19,6 +19,11 @@ Both the Telegram server bot and the Windows connector, installer and startup
 scripts are included. Production credentials, attachments and private chat history
 are excluded.
 
+
+## Connection reliability update (0.10.0)
+
+The existing desktop owner remains in control. Compact deltas, sequenced event replay, persistent command receipts, independent maintenance lanes and Telegram delivery checkpoints improve recovery without replaying uncertain actions. Update both the bot and Windows connector together. See [reliability and upgrade details](docs/RELIABILITY.en.md).
+
 ## Features
 
 - Latest message of each conversation, including closed chats without changing the active selection; native new chat/project creation and verified model/reasoning controls.

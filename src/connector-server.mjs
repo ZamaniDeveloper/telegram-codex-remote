@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Mohsen Zamani / ZamaniDeveloper. See LICENSE.
 import http from 'node:http';
+import { CommandReceipts, EventJournal } from './reliability.mjs';
 import { timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { DesktopIpc, VERSIONS } from './ipc.mjs';
@@ -12,9 +13,9 @@ import { LiveStream } from './live-stream.mjs';
 import { Accounts } from './accounts.mjs';
 import { DesktopRecovery } from './desktop-recovery.mjs';
 
-export function createConnector({ secret, ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient(), control = new DesktopControl(), transcriber = new Transcriber(), accounts = new Accounts({ ipc }), desktopRecovery = process.platform === 'win32' && ipc instanceof DesktopIpc && ipc.pipe === '\\\\.\\pipe\\codex-ipc' && process.env.CONNECTOR_AUTO_START_CODEX !== '0', recoveryRuntime } = {}) {
+export function createConnector({ secret, receipts = new CommandReceipts(), journal = new EventJournal(), ipc = new DesktopIpc(), catalog = listThreads, openThread, attachments = new AttachmentStore(), quota = new QuotaClient(), control = new DesktopControl(), transcriber = new Transcriber(), accounts = new Accounts({ ipc }), desktopRecovery = process.platform === 'win32' && ipc instanceof DesktopIpc && ipc.pipe === '\\\\.\\pipe\\codex-ipc' && process.env.CONNECTOR_AUTO_START_CODEX !== '0', recoveryRuntime } = {}) {
   if (!secret || secret.length < 32) throw Error('Connector secret must be at least 32 characters');
-  const clients = new Set(), stream = new LiveStream();
+  const clients = new Set(), stream = new LiveStream({ delta: true });
   let activeRpc = 0, accountChanging = false;
   const recovery = desktopRecovery ? new DesktopRecovery(ipc, { ...(recoveryRuntime ? { runtime: recoveryRuntime } : {}), blocked: () => accountChanging || accounts.busy, report: status => console.log('Codex desktop recovery:', status) }) : null;
   const authorized = header => {
@@ -32,11 +33,18 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
         return json(res, 200, { result: await attachments.put(meta, req) });
       } catch { return json(res, 400, { error: 'انتقال فایل کامل نشد یا مشخصات فایل معتبر نیست.' }); }
     }
-    if (req.url === '/health' && req.method === 'GET') return json(res, 200, { ready: true, protocol: 1 });
+    if (req.url === '/health' && req.method === 'GET') return json(res, 200, { ready: true, protocol: 2, eventSession: journal.session, eventSequence: journal.sequence });
+    const receiptPath = /^\/receipts\/([0-9a-f-]{36})$/i.exec(req.url);
+    if (receiptPath && req.method === 'GET') return json(res, 200, { result: receipts.read(receiptPath[1]) });
     if (req.url === '/events' && req.method === 'GET') {
       if (clients.size >= 4) return json(res, 503, { error: 'Too many subscribers' });
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' });
-      res.write(': connected\n\n'); clients.add(res);
+      const cursor = req.headers['last-event-id'];
+      const replay = cursor ? journal.replay(cursor) : null;
+      if (cursor && replay === null) res.write('data: {"type":"reset"}\n\n');
+      res.write(': connected\n\n');
+      for (const frame of replay || []) res.write(frame);
+      clients.add(res);
       const keepAlive = setInterval(() => res.write(': heartbeat\n\n'), 10000);
       res.on('close', () => { clearInterval(keepAlive); clients.delete(res); }); return;
     }
@@ -44,7 +52,7 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
     try {
       const chunks = []; let size = 0;
       for await (const b of req) { size += b.length; if (size > 1024 * 1024) throw Error('Request too large'); chunks.push(b); }
-      const { method, args = [] } = JSON.parse(Buffer.concat(chunks).toString('utf8')); let result;
+      const { method, args = [], operationId } = JSON.parse(Buffer.concat(chunks).toString('utf8')); let result;
       if (!Array.isArray(args)) throw Error('Invalid arguments');
       if (accountChanging && method !== 'accountsRead') throw Error('Account switch in progress. Wait for Codex to reconnect.');
       if (method === 'accountActivate') {
@@ -53,6 +61,7 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
       }
       activeRpc++;
       try {
+      const operation = async () => {
       if (method === 'listThreads') result = await catalog(String(args[0] || '').slice(0, 200), Math.min(20, Math.max(1, Number(args[1]) || 10)), Math.max(0, Number(args[2]) || 0));
       else if (method === 'accountsRead' && args.length === 0) result = await accounts.read();
       else if (method === 'accountLoginStart' && args.length === 1) result = await accounts.start(args[0]);
@@ -68,6 +77,10 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
       else if (method === 'transcriptionStatus' && args.length === 0) result = await transcriber.status();
       else if (method === 'transcribeAttachment' && args.length === 1) result = await transcriber.transcribe(args[0], attachments.root);
       else if (method === 'owner') result = await ipc.owner(args[0]);
+      else if (method === 'snapshot' && args.length === 2) {
+        const owner = await ipc.owner(args[0]);
+        result = owner === args[1] ? stream.snapshot(args[0], owner) : null;
+      }
       else if (method === 'follow') { await ipc.connect(); if (args[2] === false) stream.forget(args[0]); await ipc.follow(...args); result = true; }
       else if (method === 'request') {
         if (!Object.hasOwn(VERSIONS, args[0]) || !args[0].startsWith('thread-follower-')) throw Error('RPC method not allowed');
@@ -82,21 +95,26 @@ export function createConnector({ secret, ipc = new DesktopIpc(), catalog = list
         });
         result = true;
       } else throw Error('RPC method not allowed');
+      return result;
+      };
+      const mutating = ['request', 'createChat', 'quotaReset', 'accountActivate', 'accountLoginStart', 'accountLoginCancel'].includes(method);
+      result = mutating && operationId ? await receipts.execute(operationId, method, args, operation) : await operation();
       json(res, 200, { result });
       } finally { activeRpc--; if (method === 'accountActivate') accountChanging = false; }
     } catch (e) { json(res, 400, { error: e.message }); }
   });
   const broadcast = m => {
     m = stream.project(m);
+    const frame = journal.append({ type: 'broadcast', message: m });
     for (const client of clients) {
       if (client.writableLength > 32 * 1024 * 1024) { client.destroy(); continue; }
-      client.write(`data: ${JSON.stringify({ type: 'broadcast', message: m })}\n\n`);
+      client.write(frame);
     }
   };
-  const disconnected = () => { stream.clear(); for (const client of clients) client.write('data: {"type":"disconnected"}\n\n'); };
+  const disconnected = () => { stream.clear(); const frame = journal.append({type:'disconnected'}); for (const client of clients) client.write(frame); };
   ipc.on('broadcast', broadcast); ipc.on('disconnected', disconnected);
   server.once('listening', () => recovery?.start());
   server.on('close', () => { void recovery?.stop(); ipc.off('broadcast', broadcast); ipc.off('disconnected', disconnected); });
-  server.shutdown = async () => { await recovery?.stop(); await accounts.close(); for (const c of clients) c.end(); ipc.close(); await new Promise(r => server.close(r)); };
+  server.shutdown = async () => { await recovery?.stop(); await accounts.close(); for (const c of clients) c.end(); ipc.close(); await new Promise(r => server.close(r)); receipts.close(); };
   return server;
 }
