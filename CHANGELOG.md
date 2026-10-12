@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.3 - 2026-10-12
+
+- Handle a queue refresh snapshot deadline immediately even when its follow RPC is still pending, preventing an unhandled rejection during network outages.
+- Add a regression test with a slow follow RPC; preserve the existing queue recovery and Mini App settings.
+
 ## 0.9.2 - 2026-10-12
 
 - Persist the exact accepted turn ID from the desktop response, so completion can be matched after a reconnect even if a cancelled turn has no user-message item.

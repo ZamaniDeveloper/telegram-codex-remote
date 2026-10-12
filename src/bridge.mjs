@@ -143,7 +143,7 @@ export class Bridge {
     const w=this.watched.get(id);if (!w) throw Error('Conversation is not watched');
     if (!w.owner) w.owner=await this.ipc.owner(id);
     const ready=this.waitSnapshot(w);
-    await this.resync(w);await ready;
+    await Promise.all([this.resync(w),ready]);
   }
   resync(w) {
     w.synced = false;

@@ -76,6 +76,14 @@ test('failed or missing resnapshots never release a queue from stale idle state'
  await f.bridge.outbox.flush(f.bridge);assert.equal(f.calls.length,0);
 });
 
+test('snapshot timeout is handled while a slow follow RPC is still running',async t=>{
+ const f=await fixture(t);f.bridge.snapshotTimeoutMs=5;
+ let release;f.ipc.follow=async(id,owner,following)=>{if(following===false) await new Promise(r=>release=r);};
+ await assert.rejects(f.bridge.refreshQueued(f.w.id),/live|snapshot|وضعیت/);
+ assert.equal(f.w.synced,false);release();
+ while(f.w.resyncing) await new Promise(r=>setImmediate(r));
+});
+
 test('a silent event connection expires, reconnects and reads again without replaying control RPCs',async t=>{
  let connections=0, controls=0;const responses=new Set();
  const server=http.createServer((req,res)=>{
