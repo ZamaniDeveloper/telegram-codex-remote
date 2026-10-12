@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.4 - 2026-10-12
+
+- Keep the English timeout regression assertion fully English; retain all queue receipt and outage recovery fixes.
+
 ## 0.9.3 - 2026-10-12
 
 - Handle a queue refresh snapshot deadline immediately even when its follow RPC is still pending, preventing an unhandled rejection during network outages.
