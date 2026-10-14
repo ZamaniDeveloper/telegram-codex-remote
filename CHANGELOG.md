@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 - 2026-10-14
+
+- Recover transient transport failures for explicitly read-only connector RPCs with one bounded retry.
+- Preserve at-most-once behavior for control, follow and account mutations; recover accepted commands only by reading their receipts.
+- Log the safe transport error code and method without credentials or user input for connection diagnosis.
+- Add regressions for transient reads, persistent failure, explicit rejection and lost control responses.
+
 ## 0.10.0 - 2026-10-12
 
 - Preserve control of the existing desktop thread owner; no independent execution engine is introduced.

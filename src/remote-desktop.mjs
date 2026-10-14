@@ -20,14 +20,22 @@ export class RemoteDesktop extends EventEmitter {
       || receipt.metadata.threadId !== threadId || receipt.metadata.clientId !== clientId) return null;
     return receipt.result;
   }
-  async rpc(method, args) {
+  async rpc(method, args, readAttempt = 0) {
     const mutating = ['request', 'createChat', 'quotaReset', 'accountActivate', 'accountLoginStart', 'accountLoginCancel'].includes(method);
     const operationId = mutating ? (method === 'request' && args[0] === 'thread-follower-start-turn' ? args[1]?.turnStart?.request?.clientUserMessageId || randomUUID() : randomUUID()) : undefined;
     let response, body;
     try { response = await fetch(this.url + '/rpc', { method: 'POST', headers: {
       authorization: `Bearer ${this.secret}`, 'content-type': 'application/json' },
       body: JSON.stringify({ method, args, operationId }), signal: AbortSignal.timeout(method === 'transcribeAttachment' ? 660000 : method === 'accountActivate' ? 300000 : ['models', 'projects', 'createChat', 'latestMessage'].includes(method) ? 180000 : ['request', 'quotaRead', 'quotaReset', 'accountsRead', 'accountLoginStart'].includes(method) ? 65000 : 25000) }); body = await response.json(); }
-    catch {
+    catch (error) {
+      // Retry only explicitly read-only RPCs, never follower/control methods.
+      const readable = ['listThreads', 'owner', 'snapshot', 'compatibilityRead', 'transcriptionStatus', 'models', 'projects', 'latestMessage', 'quotaRead', 'accountsRead'].includes(method);
+      const code = String(error.cause?.code || error.code || error.name || 'NETWORK').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 48);
+      console.warn('Connector transport failure:', method, code, 'readAttempt', readAttempt);
+      if (readable && readAttempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        return this.rpc(method, args, 1);
+      }
       if (operationId) {
         try { const receipt = await this.receipt(operationId); if (receipt?.state === 'complete') return receipt.result; } catch {}
       }
